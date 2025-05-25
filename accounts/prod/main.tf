@@ -7,23 +7,12 @@ module "prod_trust_role" {
   source = "../../modules/iam-cross-account"
 
   role_name             = "ProdAcceptFromDev"
-  trusted_principal_arn = "arn:aws:iam::928558116184:role/DevBastionEC2Role"
+  trusted_principal_arn = "arn:aws:iam::928558116184:role/DevBastionEC2Role"  # Ensure this ARN exists in dev account
   allowed_actions = [
     "eks:DescribeCluster",
     "eks:ListNodegroups",
     "eks:ListClusters"
   ]
-}
-
-module "vpc" {
-  source                = "../../modules/vpc"
-  name                  = "prod-vpc"
-  region                = "eu-central-1"
-  vpc_cidr              = "10.20.0.0/16"
-  public_subnet_cidrs   = ["10.20.1.0/24", "10.20.2.0/24"]
-  private_subnet_cidrs  = ["10.20.3.0/24", "10.20.4.0/24"]
-  azs                   = ["eu-central-1a", "eu-central-1b"]
-  ssm_endpoint_sg       = aws_security_group.eks_ssm_endpoint.id
 }
 
 resource "aws_security_group" "eks_ssm_endpoint" {
@@ -39,9 +28,13 @@ resource "aws_security_group" "eks_ssm_endpoint" {
   }
 }
 
-module "eks" {
-  source           = "../../modules/eks"
-  name             = "prod-eks"
-  subnet_ids       = module.vpc.private_subnet_ids
+module "vpc" {
+  source                = "../../modules/vpc"
+  name                  = "prod-vpc"
+  region                = "eu-central-1"
+  vpc_cidr              = "10.20.0.0/16"
+  public_subnet_cidrs   = ["10.20.1.0/24", "10.20.2.0/24"]
+  private_subnet_cidrs  = ["10.20.3.0/24", "10.20.4.0/24"]
+  azs                   = ["eu-central-1a", "eu-central-1b"]
+  ssm_endpoint_sg       = aws_security_group.eks_ssm_endpoint.id
 }
-

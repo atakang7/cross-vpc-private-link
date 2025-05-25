@@ -19,8 +19,16 @@ module "bastion_iam_role" {
   role_name = "DevBastionEC2Role"
 }
 
-module "eks" {
-  source      = "../../modules/eks"
-  name        = "dev-eks"
-  subnet_ids  = module.vpc.private_subnet_ids
+resource "aws_instance" "dev_test_instance" {
+  ami                         = "ami-0c55b159cbfafe1f0"
+  instance_type               = "t3.micro"
+  subnet_id                   = module.vpc.private_subnet_ids[0]
+  vpc_security_group_ids      = [aws_security_group.vpn_access.id]
+  iam_instance_profile        = module.bastion_iam_role.instance_profile_name
+  associate_public_ip_address = false
+  key_name                    = var.key_pair_name
+
+  tags = {
+    Name = "dev-test-instance"
+  }
 }

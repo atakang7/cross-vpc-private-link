@@ -6,7 +6,7 @@ resource "aws_iam_role" "dev_to_prod" {
     Statement = [{
       Effect = "Allow",
       Principal = {
-        Service = "ec2.amazonaws.com"
+        AWS = "arn:aws:iam::928558116184:root"
       },
       Action = "sts:AssumeRole"
     }]
