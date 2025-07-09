@@ -1,0 +1,33 @@
+# .github/workflows/infra-scan.yml
+name: Infrastructure Scanning
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  iac-scan:
+    name: IaC Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install Checkov for comprehensive IaC scanning (Terraform, K8s, etc.)
+      - name: Run Checkov on infrastructure code
+        uses: bridgecrewio/checkov-action@v12.2435.0
+        with:
+          directory: ./  # Change if your IaC is in a subfolder
+          quiet: false
+          output_format: cli
+
+      # Install Trivy for extra IaC + container security scanning
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@v0.20.0
+
+      - name: Run Trivy config scan
+        run: |
+          trivy config . --exit-code 1 --severity HIGH,CRITICAL
