@@ -11,7 +11,7 @@ output "private_subnet_ids" {
 }
 
 output "grafana_dns" {
-  value = "grafana.internal.company:5003"
+  value = "grafana.internal.company:3000"
   description = "DNS name for accessing Grafana"
 }
 
@@ -23,4 +23,9 @@ output "grafana_vpce_dns" {
 output "grafana_internal_dns" {
   value = trim(aws_route53_record.grafana.fqdn, ".")
   description = "Internal DNS for Grafana"
+}
+
+output "private_instance_id" {
+  value = aws_instance.dev_test_instance.id
+  description = "Instance ID for SSM access"
 }

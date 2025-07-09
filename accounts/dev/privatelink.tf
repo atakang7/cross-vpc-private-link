@@ -24,8 +24,8 @@ resource "aws_security_group" "grafana_endpoint" {
   vpc_id      = module.vpc.vpc_id
   
   ingress {
-    from_port   = 5003
-    to_port     = 5003
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["10.10.0.0/16", "172.16.0.0/22"]  # Dev VPC CIDR and VPN CIDR
     description = "Allow access to Grafana from VPC and VPN"

@@ -57,7 +57,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Optional: SSM VPC endpoint in private subnet
+# SSM VPC Endpoints for Session Manager
 resource "aws_vpc_endpoint" "ssm" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.${var.region}.ssm"
@@ -70,4 +70,46 @@ resource "aws_vpc_endpoint" "ssm" {
   tags = {
     Name = "${var.name}-ssm-endpoint"
   }
+}
+
+resource "aws_vpc_endpoint" "ssmmessages" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.ssmmessages"
+  vpc_endpoint_type = "Interface"
+  subnet_ids   = [for subnet in aws_subnet.private : subnet.id]
+
+  private_dns_enabled = true
+  security_group_ids  = [var.ssm_endpoint_sg]
+
+  tags = {
+    Name = "${var.name}-ssmmessages-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "ec2messages" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.ec2messages"
+  vpc_endpoint_type = "Interface"
+  subnet_ids   = [for subnet in aws_subnet.private : subnet.id]
+
+  private_dns_enabled = true
+  security_group_ids  = [var.ssm_endpoint_sg]
+
+  tags = {
+    Name = "${var.name}-ec2messages-endpoint"
+  }
+}
+
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.name}-private-rt"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }

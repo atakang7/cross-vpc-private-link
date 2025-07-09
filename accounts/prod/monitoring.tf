@@ -4,8 +4,8 @@ resource "aws_security_group" "grafana_sg" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    from_port   = 5003
-    to_port     = 5003
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["10.20.0.0/16"]  # Internal Prod VPC
     description = "Allow Grafana access"
@@ -46,54 +46,87 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+# SSM role for Grafana instance
+resource "aws_iam_role" "grafana_ssm_role" {
+  name = "GrafanaSSMRole"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "grafana_ssm_managed_instance_core" {
+  role       = aws_iam_role.grafana_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "grafana_ssm_profile" {
+  name = "GrafanaSSMInstanceProfile"
+  role = aws_iam_role.grafana_ssm_role.name
+}
+
 resource "aws_instance" "grafana" {
   ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = "t3.micro"
   subnet_id                   = module.vpc.private_subnet_ids[0]
   vpc_security_group_ids      = [aws_security_group.grafana_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.grafana_ssm_profile.name
   associate_public_ip_address = false
 
   user_data = <<-EOF
     #!/bin/bash
     yum update -y
-    amazon-linux-extras enable epel
-    yum install -y epel-release wget tar firewalld
+    
+    # Install Grafana
+    cat > /etc/yum.repos.d/grafana.repo << 'GRAFANA_REPO'
+[grafana]
+name=grafana
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+GRAFANA_REPO
+
     yum install -y grafana
+    
+    # Configure Grafana to run on port 3000
     systemctl enable grafana-server
     systemctl start grafana-server
 
     # Install Node Exporter
     useradd -rs /bin/false node_exporter
+    cd /tmp
     wget https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
     tar xvfz node_exporter-1.6.1.linux-amd64.tar.gz
     cp node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin/
     chown node_exporter:node_exporter /usr/local/bin/node_exporter
 
-    cat <<EOT > /etc/systemd/system/node_exporter.service
-    [Unit]
-    Description=Node Exporter
-    After=network.target
+    cat > /etc/systemd/system/node_exporter.service << 'NODE_EXPORTER_SERVICE'
+[Unit]
+Description=Node Exporter
+After=network.target
 
-    [Service]
-    User=node_exporter
-    Group=node_exporter
-    Type=simple
-    ExecStart=/usr/local/bin/node_exporter
+[Service]
+User=node_exporter
+Group=node_exporter
+Type=simple
+ExecStart=/usr/local/bin/node_exporter
 
-    [Install]
-    WantedBy=multi-user.target
-    EOT
+[Install]
+WantedBy=multi-user.target
+NODE_EXPORTER_SERVICE
 
     systemctl daemon-reload
     systemctl enable node_exporter
     systemctl start node_exporter
-
-    # Open ports in firewall
-    systemctl enable firewalld
-    systemctl start firewalld
-    firewall-cmd --permanent --add-port=5003/tcp
-    firewall-cmd --permanent --add-port=9100/tcp
-    firewall-cmd --reload
   EOF
 
   tags = {
@@ -114,21 +147,29 @@ resource "aws_lb" "grafana_nlb" {
 
 resource "aws_lb_target_group" "grafana_tg" {
   name        = "grafana-tg"
-  port        = 5003
+  port        = 3000
   protocol    = "TCP"
   vpc_id      = module.vpc.vpc_id
   target_type = "instance"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    port                = "traffic-port"
+    protocol            = "TCP"
+    unhealthy_threshold = 2
+  }
 }
 
 resource "aws_lb_target_group_attachment" "grafana_attach" {
   target_group_arn = aws_lb_target_group.grafana_tg.arn
   target_id        = aws_instance.grafana.id
-  port             = 5003
+  port             = 3000
 }
 
 resource "aws_lb_listener" "grafana_listener" {
   load_balancer_arn = aws_lb.grafana_nlb.arn
-  port              = 5003
+  port              = 3000
   protocol          = "TCP"
 
   default_action {

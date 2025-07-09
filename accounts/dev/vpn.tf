@@ -68,7 +68,7 @@ resource "aws_ec2_client_vpn_authorization_rule" "vpn_dev_vpc_auth" {
   authorize_all_groups   = true
 }
 
-# Authorize VPN access to prod VPC
+# Authorize VPN access to prod VPC (via PrivateLink)
 resource "aws_ec2_client_vpn_authorization_rule" "vpn_prod_vpc_auth" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
   target_network_cidr    = "10.20.0.0/16"  # Prod VPC CIDR
@@ -82,7 +82,7 @@ resource "aws_ec2_client_vpn_route" "dev_vpc_route" {
   target_vpc_subnet_id   = module.vpc.private_subnet_ids[0]
 }
 
-# Route table for prod VPC
+# Route table for prod VPC (via PrivateLink)
 resource "aws_ec2_client_vpn_route" "prod_vpc_route" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
   destination_cidr_block = "10.20.0.0/16"  # Prod VPC CIDR
@@ -94,42 +94,6 @@ resource "aws_ec2_client_vpn_route" "internet_route" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
   destination_cidr_block = "0.0.0.0/0"
   target_vpc_subnet_id   = module.vpc.private_subnet_ids[0]
-}
-
-# VPN security group
-resource "aws_security_group" "vpn_access" {
-  name        = "vpn-access"
-  description = "Security group for VPN connected clients"
-  vpc_id      = module.vpc.vpc_id
-  
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.client_cidr_block]
-  }
-
-  tags = {
-    Name = "vpn-access-sg"
-  }
-}
-
-# Update bastion security group to allow access from VPN
-resource "aws_security_group_rule" "bastion_vpn_access" {
-  security_group_id        = aws_security_group.bastion_sg.id
-  type                     = "ingress"
-  from_port                = 22
-  to_port                  = 22
-  protocol                 = "tcp"
-  cidr_blocks              = ["172.16.0.0/22"]  # VPN CIDR
-  description              = "Allow SSH from VPN clients"
 }
 
 # Output VPN endpoint for configuration
