@@ -1,5 +1,4 @@
-# .github/workflows/infra-scan.yml
-name: Infrastructure Scanning
+name: Infra + Container Security Scan
 
 on:
   push:
@@ -7,27 +6,46 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  actions: read
+  security-events: write
+
 jobs:
-  iac-scan:
-    name: IaC Security Scan
+  iac-config-scan:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Install Checkov for comprehensive IaC scanning (Terraform, K8s, etc.)
-      - name: Run Checkov on infrastructure code
-        uses: bridgecrewio/checkov-action@v12.2435.0
+      - name: Run Trivy IaC config scan
+        uses: aquasecurity/trivy-action@v0.32.0
         with:
-          directory: ./  # Change if your IaC is in a subfolder
-          quiet: false
-          output_format: cli
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-iac.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
 
-      # Install Trivy for extra IaC + container security scanning
-      - name: Install Trivy
-        uses: aquasecurity/trivy-action@v0.20.0
+      - name: Upload IaC scan to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-iac.sarif'
 
-      - name: Run Trivy config scan
+  container-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: iac-config-scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
         run: |
-          trivy config . --exit-code 1 --severity HIGH,CRITICAL
+          docker build -t myapp:${{ github.sha }} .
+
+      - name: Run Trivy container image scan
+        uses: aquasecurity/trivy-action@v0.32.0
+        with:
+          image-ref: "myapp:${{ github.sha }}"
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
