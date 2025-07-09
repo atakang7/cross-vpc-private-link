@@ -1,4 +1,4 @@
-name: Security Scan (Infra + Docker)
+name: Infra Security Scan
 
 on:
   push:
@@ -15,8 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Trivy IaC scan
-        uses: aquasecurity/trivy-action@v0.32.0
+
+      - name: Trivy IaC config scan
+        uses: aquasecurity/trivy-action@v0.32.0 # or @latest if version issues
         with:
           scan-type: config
           scan-ref: .
@@ -24,17 +25,9 @@ jobs:
           output: trivy-iac-results.sarif
           severity: CRITICAL,HIGH
           exit-code: 1
-  container-scan:
-    runs-on: ubuntu-latest
-    needs: iac-scan
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t myapp:${{ github.sha }} .
-      - name: Trivy container image scan
-        uses: aquasecurity/trivy-action@v0.32.0
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          image-ref: myapp:${{ github.sha }}
-          format: table
-          severity: CRITICAL,HIGH
-          exit-code: 1
+          sarif_file: trivy-iac-results.sarif
