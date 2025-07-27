@@ -1,34 +1,28 @@
-# Fetch information about the Prod VPC Endpoint Service
-data "aws_vpc_endpoint_service" "grafana" {
-  service_name = var.grafana_endpoint_service_name
-}
-
-# Create VPC Endpoint for Grafana
-resource "aws_vpc_endpoint" "grafana" {
+resource "aws_vpc_endpoint" "hello_world" {
   vpc_id             = module.vpc.vpc_id
-  service_name       = data.aws_vpc_endpoint_service.grafana.service_name
+  service_name       = var.hello_world_endpoint_service_name
   vpc_endpoint_type  = "Interface"
   subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = [aws_security_group.grafana_endpoint.id]
+  security_group_ids = [aws_security_group.hello_world_endpoint.id]
   private_dns_enabled = false
   
   tags = {
-    Name = "grafana-vpc-endpoint"
+    Name = "hello-world-vpc-endpoint"
   }
 }
 
 # Security group for the VPC Endpoint
-resource "aws_security_group" "grafana_endpoint" {
-  name        = "grafana-endpoint-sg"
-  description = "Allow access to Grafana VPC Endpoint"
+resource "aws_security_group" "hello_world_endpoint" {
+  name        = "hello-world-endpoint-sg"
+  description = "Allow access to Hello World VPC Endpoint"
   vpc_id      = module.vpc.vpc_id
   
   ingress {
-    from_port   = 3000
-    to_port     = 3000
+    from_port   = 8080
+    to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["10.10.0.0/16", "172.16.0.0/22"]  # Dev VPC CIDR and VPN CIDR
-    description = "Allow access to Grafana from VPC and VPN"
+    description = "Allow access to Hello World from VPC and VPN"
   }
   
   egress {
@@ -40,7 +34,7 @@ resource "aws_security_group" "grafana_endpoint" {
   }
   
   tags = {
-    Name = "grafana-endpoint-sg"
+    Name = "hello-world-endpoint-sg"
   }
 }
 
@@ -57,15 +51,15 @@ resource "aws_route53_zone" "private" {
   }
 }
 
-# Create DNS record for Grafana
-resource "aws_route53_record" "grafana" {
+# Create DNS record for Hello World
+resource "aws_route53_record" "hello_world" {
   zone_id = aws_route53_zone.private.zone_id
-  name    = "grafana.internal.company"
+  name    = "hello.internal.company"
   type    = "A"
   
   alias {
-    name                   = aws_vpc_endpoint.grafana.dns_entry[0].dns_name
-    zone_id                = aws_vpc_endpoint.grafana.dns_entry[0].hosted_zone_id
+    name                   = aws_vpc_endpoint.hello_world.dns_entry[0].dns_name
+    zone_id                = aws_vpc_endpoint.hello_world.dns_entry[0].hosted_zone_id
     evaluate_target_health = true
   }
-}
+} 

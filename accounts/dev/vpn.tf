@@ -1,36 +1,46 @@
-resource "aws_directory_service_directory" "vpn_directory" {
-  name     = "corp.internal.company"
-  password = "SecurePassword123!"
-  size     = "Small"
-  
-  vpc_settings {
-    vpc_id     = module.vpc.vpc_id
-    subnet_ids = slice(module.vpc.private_subnet_ids, 0, 2)
-  }
+# CA Certificate for VPN
+resource "aws_acm_certificate" "vpn_ca" {
+  private_key      = file("scripts/certs/ca.key")
+  certificate_body = file("scripts/certs/ca.crt")
   
   tags = {
-    Name = "vpn-directory"
+    Name = "vpn-ca-cert"
   }
 }
 
+# VPN Server Certificate
 resource "aws_acm_certificate" "vpn_server" {
   private_key      = file(var.server_key_file_path)
   certificate_body = file(var.server_certificate_file_path)
+  certificate_chain = file("scripts/certs/ca.crt")
   
   tags = {
     Name = "vpn-server-cert"
   }
 }
 
+# CloudWatch Logs for VPN
+resource "aws_cloudwatch_log_group" "vpn_logs" {
+  name              = "/aws/client-vpn/dev-vpn"
+  retention_in_days = 30
+}
+
+resource "aws_cloudwatch_log_stream" "vpn_logs" {
+  name           = "connection-logs"
+  log_group_name = aws_cloudwatch_log_group.vpn_logs.name
+}
+
+# Client VPN Endpoint with Certificate Authentication
 resource "aws_ec2_client_vpn_endpoint" "vpn" {
   description            = "Dev Client VPN Endpoint"
   server_certificate_arn = aws_acm_certificate.vpn_server.arn
   client_cidr_block      = "172.16.0.0/22"
   split_tunnel           = true
+  dns_servers            = ["10.10.0.2"]  # VPC DNS resolver
   
   authentication_options {
-    type                = "directory-service-authentication"
-    active_directory_id = aws_directory_service_directory.vpn_directory.id
+    type                       = "certificate-authentication"
+    root_certificate_chain_arn = aws_acm_certificate.vpn_ca.arn
   }
   
   connection_log_options {
@@ -44,16 +54,6 @@ resource "aws_ec2_client_vpn_endpoint" "vpn" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "vpn_logs" {
-  name              = "/aws/client-vpn/dev-vpn"
-  retention_in_days = 30
-}
-
-resource "aws_cloudwatch_log_stream" "vpn_logs" {
-  name           = "connection-logs"
-  log_group_name = aws_cloudwatch_log_group.vpn_logs.name
-}
-
 # Associate with private subnets
 resource "aws_ec2_client_vpn_network_association" "vpn_association" {
   count                  = length(module.vpc.private_subnet_ids)
@@ -61,39 +61,11 @@ resource "aws_ec2_client_vpn_network_association" "vpn_association" {
   subnet_id              = module.vpc.private_subnet_ids[count.index]
 }
 
-# Authorize VPN access to dev VPC
+# Authorize VPN access to dev VPC only (AWS auto-creates this route)
 resource "aws_ec2_client_vpn_authorization_rule" "vpn_dev_vpc_auth" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  target_network_cidr    = "10.10.0.0/16"  # Dev VPC CIDR
+  target_network_cidr    = "10.10.0.0/16"
   authorize_all_groups   = true
-}
-
-# Authorize VPN access to prod VPC (via PrivateLink)
-resource "aws_ec2_client_vpn_authorization_rule" "vpn_prod_vpc_auth" {
-  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  target_network_cidr    = "10.20.0.0/16"  # Prod VPC CIDR
-  authorize_all_groups   = true
-}
-
-# Route table for dev VPC
-resource "aws_ec2_client_vpn_route" "dev_vpc_route" {
-  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  destination_cidr_block = "10.10.0.0/16"  # Dev VPC CIDR
-  target_vpc_subnet_id   = module.vpc.private_subnet_ids[0]
-}
-
-# Route table for prod VPC (via PrivateLink)
-resource "aws_ec2_client_vpn_route" "prod_vpc_route" {
-  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  destination_cidr_block = "10.20.0.0/16"  # Prod VPC CIDR
-  target_vpc_subnet_id   = module.vpc.private_subnet_ids[0]
-}
-
-# Internet access route
-resource "aws_ec2_client_vpn_route" "internet_route" {
-  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.vpn.id
-  destination_cidr_block = "0.0.0.0/0"
-  target_vpc_subnet_id   = module.vpc.private_subnet_ids[0]
 }
 
 # Output VPN endpoint for configuration

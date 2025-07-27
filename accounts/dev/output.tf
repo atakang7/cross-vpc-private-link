@@ -10,19 +10,19 @@ output "private_subnet_ids" {
   value = module.vpc.private_subnet_ids
 }
 
-output "grafana_dns" {
-  value = "grafana.internal.company:3000"
-  description = "DNS name for accessing Grafana"
+output "hello_world_dns" {
+  value = "hello.internal.company:8080"
+  description = "DNS name for accessing Hello World service"
 }
 
-output "grafana_vpce_dns" {
-  value = aws_vpc_endpoint.grafana.dns_entry[0].dns_name
+output "hello_world_vpce_dns" {
+  value = aws_vpc_endpoint.hello_world.dns_entry[0].dns_name
   description = "VPC Endpoint DNS name"
 }
 
-output "grafana_internal_dns" {
-  value = trim(aws_route53_record.grafana.fqdn, ".")
-  description = "Internal DNS for Grafana"
+output "hello_world_internal_dns" {
+  value = trim(aws_route53_record.hello_world.fqdn, ".")
+  description = "Internal DNS for Hello World service"
 }
 
 output "private_instance_id" {

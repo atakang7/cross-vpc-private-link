@@ -1,22 +1,14 @@
-resource "aws_security_group" "grafana_sg" {
-  name        = "grafana-sg"
-  description = "Allow access to Grafana + Node Exporter"
-  vpc_id      = module.vpc.vpc_id
+resource "aws_security_group" "hello_world_sg" {
+  name        = "hello-world-sg"
+  description = "Allow access to Hello World service"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 3000
-    to_port     = 3000
+    from_port   = 8080
+    to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["10.20.0.0/16"]  # Internal Prod VPC
-    description = "Allow Grafana access"
-  }
-
-  ingress {
-    from_port   = 9100
-    to_port     = 9100
-    protocol    = "tcp"
-    cidr_blocks = ["10.20.0.0/16"]  # Grafana scraping itself
-    description = "Allow Node Exporter access"
+    description = "Allow Hello World access"
   }
 
   egress {
@@ -27,7 +19,7 @@ resource "aws_security_group" "grafana_sg" {
   }
 
   tags = {
-    Name = "grafana-sg"
+    Name = "hello-world-sg"
   }
 }
 
@@ -46,9 +38,9 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-# SSM role for Grafana instance
-resource "aws_iam_role" "grafana_ssm_role" {
-  name = "GrafanaSSMRole"
+# SSM role for Hello World instance
+resource "aws_iam_role" "hello_world_ssm_role" {
+  name = "HelloWorldSSMRole"
   
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -60,96 +52,102 @@ resource "aws_iam_role" "grafana_ssm_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "grafana_ssm_managed_instance_core" {
-  role       = aws_iam_role.grafana_ssm_role.name
+resource "aws_iam_role_policy_attachment" "hello_world_ssm_managed_instance_core" {
+  role       = aws_iam_role.hello_world_ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_instance_profile" "grafana_ssm_profile" {
-  name = "GrafanaSSMInstanceProfile"
-  role = aws_iam_role.grafana_ssm_role.name
+resource "aws_iam_instance_profile" "hello_world_ssm_profile" {
+  name = "HelloWorldSSMInstanceProfile"
+  role = aws_iam_role.hello_world_ssm_role.name
 }
 
-resource "aws_instance" "grafana" {
+resource "aws_instance" "hello_world" {
   ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = "t3.micro"
-  subnet_id                   = module.vpc.private_subnet_ids[0]
-  vpc_security_group_ids      = [aws_security_group.grafana_sg.id]
-  iam_instance_profile        = aws_iam_instance_profile.grafana_ssm_profile.name
+  subnet_id                   = aws_subnet.private[0].id
+  vpc_security_group_ids      = [aws_security_group.hello_world_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.hello_world_ssm_profile.name
   associate_public_ip_address = false
 
   user_data = <<-EOF
     #!/bin/bash
     yum update -y
+    yum install -y python3
     
-    # Install Grafana
-    cat > /etc/yum.repos.d/grafana.repo << 'GRAFANA_REPO'
-[grafana]
-name=grafana
-baseurl=https://packages.grafana.com/oss/rpm
-repo_gpgcheck=1
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.grafana.com/gpg.key
-sslverify=1
-sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-GRAFANA_REPO
+    # Create a simple HTTP server
+    cat > /home/ec2-user/hello_world.py << 'PYTHON_SCRIPT'
+import http.server
+import socketserver
+import json
+from datetime import datetime
 
-    yum install -y grafana
-    
-    # Configure Grafana to run on port 3000
-    systemctl enable grafana-server
-    systemctl start grafana-server
+class HelloWorldHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {
+            "message": "Hello World from Production!",
+            "timestamp": datetime.now().isoformat(),
+            "server": "prod-hello-world",
+            "status": "healthy"
+        }
+        
+        self.wfile.write(json.dumps(response, indent=2).encode())
 
-    # Install Node Exporter
-    useradd -rs /bin/false node_exporter
-    cd /tmp
-    wget https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
-    tar xvfz node_exporter-1.6.1.linux-amd64.tar.gz
-    cp node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin/
-    chown node_exporter:node_exporter /usr/local/bin/node_exporter
+PORT = 8080
+with socketserver.TCPServer(("", PORT), HelloWorldHandler) as httpd:
+    print(f"Hello World server running on port {PORT}")
+    httpd.serve_forever()
+PYTHON_SCRIPT
 
-    cat > /etc/systemd/system/node_exporter.service << 'NODE_EXPORTER_SERVICE'
+    # Create systemd service
+    cat > /etc/systemd/system/hello-world.service << 'SERVICE_FILE'
 [Unit]
-Description=Node Exporter
+Description=Hello World Service
 After=network.target
 
 [Service]
-User=node_exporter
-Group=node_exporter
 Type=simple
-ExecStart=/usr/local/bin/node_exporter
+User=ec2-user
+WorkingDirectory=/home/ec2-user
+ExecStart=/usr/bin/python3 /home/ec2-user/hello_world.py
+Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
-NODE_EXPORTER_SERVICE
+SERVICE_FILE
 
+    # Start the service
     systemctl daemon-reload
-    systemctl enable node_exporter
-    systemctl start node_exporter
+    systemctl enable hello-world
+    systemctl start hello-world
   EOF
 
   tags = {
-    Name = "GrafanaInstance"
+    Name = "HelloWorldInstance"
   }
 }
 
-resource "aws_lb" "grafana_nlb" {
-  name               = "grafana-nlb"
+resource "aws_lb" "hello_world_nlb" {
+  name               = "hello-world-nlb"
   internal           = true
   load_balancer_type = "network"
-  subnets            = module.vpc.private_subnet_ids
+  subnets            = [for subnet in aws_subnet.private : subnet.id]
 
   tags = {
-    Name = "GrafanaNLB"
+    Name = "HelloWorldNLB"
   }
 }
 
-resource "aws_lb_target_group" "grafana_tg" {
-  name        = "grafana-tg"
-  port        = 3000
+resource "aws_lb_target_group" "hello_world_tg" {
+  name        = "hello-world-tg"
+  port        = 8080
   protocol    = "TCP"
-  vpc_id      = module.vpc.vpc_id
+  vpc_id      = aws_vpc.main.id
   target_type = "instance"
 
   health_check {
@@ -161,41 +159,40 @@ resource "aws_lb_target_group" "grafana_tg" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "grafana_attach" {
-  target_group_arn = aws_lb_target_group.grafana_tg.arn
-  target_id        = aws_instance.grafana.id
-  port             = 3000
+resource "aws_lb_target_group_attachment" "hello_world_attach" {
+  target_group_arn = aws_lb_target_group.hello_world_tg.arn
+  target_id        = aws_instance.hello_world.id
+  port             = 8080
 }
 
-resource "aws_lb_listener" "grafana_listener" {
-  load_balancer_arn = aws_lb.grafana_nlb.arn
-  port              = 3000
+resource "aws_lb_listener" "hello_world_listener" {
+  load_balancer_arn = aws_lb.hello_world_nlb.arn
+  port              = 8080
   protocol          = "TCP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.grafana_tg.arn
+    target_group_arn = aws_lb_target_group.hello_world_tg.arn
   }
 }
 
-resource "aws_vpc_endpoint_service" "grafana" {
+resource "aws_vpc_endpoint_service" "hello_world" {
   acceptance_required        = false
-  network_load_balancer_arns = [aws_lb.grafana_nlb.arn]
+  network_load_balancer_arns = [aws_lb.hello_world_nlb.arn]
 
   tags = {
-    Name = "grafana-endpoint-service"
+    Name = "hello-world-endpoint-service"
   }
 }
 
 resource "aws_vpc_endpoint_service_allowed_principal" "dev_account" {
-  vpc_endpoint_service_id = aws_vpc_endpoint_service.grafana.id
-  principal_arn           = "arn:aws:iam::928558116184:root"
+  vpc_endpoint_service_id = aws_vpc_endpoint_service.hello_world.id
+  principal_arn           = "arn:aws:iam::471112589061:root"  # Your actual dev account
+}
+output "hello_world_endpoint_service_name" {
+  value = aws_vpc_endpoint_service.hello_world.service_name
 }
 
-output "grafana_endpoint_service_name" {
-  value = aws_vpc_endpoint_service.grafana.service_name
-}
-
-output "grafana_ec2_private_ip" {
-  value = aws_instance.grafana.private_ip
+output "hello_world_ec2_private_ip" {
+  value = aws_instance.hello_world.private_ip
 }
