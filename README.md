@@ -96,7 +96,6 @@ modules/
 - PrivateLink traffic stays within AWS backbone
 - Certificate-based VPN authentication
 - Security groups restrict access by CIDR
-- Credentials excluded from git via `.gitignore`
 
 ## Cleanup
 
