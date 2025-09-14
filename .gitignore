@@ -1,3 +1,34 @@
+# Terraform
 **/.terraform.*
 .terraform/
-**/certs
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+.terraformrc
+terraform.rc
+
+# Certificates and Keys
+**/certs/
+**/*.crt
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+
+# VPN Configuration
+*.ovpn
+*.conf
+
+# AWS Credentials
+.aws/
+**/credentials
+**/.env
+**/.env.*
+
+# Package files
+**/*.deb
+**/*.rpm
+
+# Logs
+*.log
