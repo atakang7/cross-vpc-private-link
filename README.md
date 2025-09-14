@@ -1,97 +1,106 @@
-# Cross VPC PrivateLink (minimal prototype)
+# Cross-VPC PrivateLink
 
-Connect two AWS accounts privately with AWS PrivateLink. Prod provides a service. Dev consumes it. Optional Client VPN for testing.
+Private service connectivity between AWS accounts using PrivateLink. Production account provides services, development account consumes them via interface endpoints with custom DNS.
 
 ![System Architecture](img/system_architecture.png)
 
-## Layout
+## Architecture
 
-```
-envs/
-  dev/   # consumer stack
-  prod/  # provider stack
-modules/
-  vpc-core/             # VPC, subnets, routes
-  vpc-ssm-endpoints/    # SSM endpoints + SG
-  privatelink-provider/ # NLB + endpoint service (+ demo app)
-  privatelink-consumer/ # Interface endpoint + SG + private DNS
-  client-vpn/           # Client VPN (cert auth)
-scripts/
-  first-run.sh and modular helpers
-  70_destroy_all.sh      # destroy dev then prod safely
-```
+- **Provider (Prod)**: NLB + VPC Endpoint Service
+- **Consumer (Dev)**: Interface VPC Endpoint + Route53 Private Zone
+- **Access**: Client VPN with certificate authentication
+- **DNS**: Custom private zone (`internal.company`) for clean service discovery
 
-## Minimal flow
+## Scripts
 
-Prereqs
-- AWS CLI profiles: dev and prod
-- OpenTofu (tofu), OpenSSL, optional: openvpn
+| Script | Purpose |
+|--------|---------|
+| `00_check_prereqs.sh` | Validate AWS CLI profiles and dependencies |
+| `10_generate_certs.sh` | Generate CA and client/server certificates for VPN |
+| `20_import_acm.sh` | Import certificates to AWS Certificate Manager |
+| `30_deploy_prod.sh` | Deploy provider infrastructure (NLB + endpoint service) |
+| `40_deploy_dev.sh` | Deploy consumer infrastructure (VPC endpoint + VPN) |
+| `50_export_vpn_config.sh` | Export OpenVPN configuration file |
+| `60_test_privateline.sh` | Test connectivity via PrivateLink endpoint |
+| `70_destroy_all.sh` | Clean teardown of all resources |
 
-1) One-liner (orchestrated)
-```zsh
-export DEV_PROFILE=dev
-export PROD_PROFILE=prod
+## Quick Start
+
+Set AWS profiles and run orchestrated deployment:
+```bash
+export DEV_PROFILE=dev PROD_PROFILE=prod
 bash first-run.sh
 ```
 
-2) Manual (short version)
-- Deploy provider (prod):
-```zsh
-AWS_PROFILE=prod tofu -chdir envs/prod init
-AWS_PROFILE=prod tofu -chdir envs/prod apply -auto-approve
-```
-- (Optional) Generate and import VPN certs (dev):
-```zsh
-bash scripts/10_generate_certs.sh
-SERVER_ARN=$(aws acm import-certificate --profile dev \
-  --certificate fileb://scripts/certs/server.crt \
-  --private-key fileb://scripts/certs/server.key \
-  --certificate-chain fileb://scripts/certs/ca.crt \
-  --query CertificateArn --output text)
-CA_ARN=$(aws acm import-certificate --profile dev \
-  --certificate fileb://scripts/certs/ca.crt \
-  --private-key fileb://scripts/certs/ca.key \
-  --query CertificateArn --output text)
-```
-- Deploy consumer (dev):
-```zsh
-AWS_PROFILE=dev tofu -chdir envs/dev init
-AWS_PROFILE=dev tofu -chdir envs/dev apply -auto-approve \
-  -var "vpn_server_cert_arn=${SERVER_ARN:-}" \
-  -var "vpn_root_ca_arn=${CA_ARN:-}"
-```
-- Export VPN config (if VPN created) and connect:
-```zsh
-aws ec2 export-client-vpn-client-configuration --profile dev \
-  --client-vpn-endpoint-id "$(tofu -chdir envs/dev output -raw vpn_endpoint)" > dev.ovpn
-sudo openvpn --config dev.ovpn \
-  --cert scripts/certs/client.crt \
-  --key scripts/certs/client.key \
-  --ca scripts/certs/ca.crt
-```
-- Test PrivateLink over VPN:
-```zsh
-bash scripts/60_test_privateline.sh  # curls http://hello.internal.company:8080
+Test connectivity:
+```bash
+sudo openvpn --config dev.ovpn --cert scripts/certs/client.crt --key scripts/certs/client.key --ca scripts/certs/ca.crt &
+curl hello.internal.company:8080
 ```
 
-Cleanup
-- Destroy both environments when done:
-```zsh
-DEV_PROFILE=dev PROD_PROFILE=prod bash scripts/70_destroy_all.sh --yes
+## Manual Deployment
+
+1. **Prerequisites**
+   ```bash
+   bash scripts/00_check_prereqs.sh
+   ```
+
+2. **Deploy Provider**
+   ```bash
+   bash scripts/30_deploy_prod.sh
+   ```
+
+3. **Generate Certificates**
+   ```bash
+   bash scripts/10_generate_certs.sh
+   bash scripts/20_import_acm.sh
+   ```
+
+4. **Deploy Consumer**
+   ```bash
+   bash scripts/40_deploy_dev.sh
+   ```
+
+5. **Connect VPN**
+   ```bash
+   bash scripts/50_export_vpn_config.sh
+   ```
+
+6. **Test Service**
+   ```bash
+   bash scripts/60_test_privateline.sh
+   ```
+
+## Module Structure
+
+```
+modules/
+├── vpc-core/             # VPC, private subnets, route tables
+├── vpc-ssm-endpoints/    # SSM endpoints for private management
+├── privatelink-provider/ # NLB + endpoint service + demo app
+├── privatelink-consumer/ # Interface endpoint + private DNS zone
+└── client-vpn/           # Certificate-based Client VPN
 ```
 
-## How the modules work (in 60 seconds)
-- Each env stack composes small modules: vpc-core -> vpc-ssm-endpoints -> provider/consumer -> optional client-vpn.
-- Inputs are explicit; see each module README for variables and outputs.
-- Prod exports the PrivateLink service name. Dev reads it via terraform_remote_state.
-- Security groups live with the module that needs them to avoid dependency cycles.
+## Network Design
 
-Learn more per env
-- Dev: envs/dev/README.md (consumer wiring, variables, VPN)
-- Prod: envs/prod/README.md (provider wiring, allowed_principals)
+- **Prod VPC**: `10.0.0.0/16`
+- **Dev VPC**: `10.10.0.0/16` 
+- **VPN Clients**: `172.16.0.0/22`
+- **DNS**: AWS resolver at `10.10.0.2` for private zones
+- **Routing**: Split tunnel VPN (internet traffic stays local)
 
-## Use this repo
-- Clone, set AWS profiles, run the minimal flow above.
-- Each module has a tiny README with inputs/outputs and an example.
-- CI checks formatting/validation; security scan runs on PRs.
+## Security
+
+- Private subnets only (no internet gateways)
+- PrivateLink traffic stays within AWS backbone
+- Certificate-based VPN authentication
+- Security groups restrict access by CIDR
+- Credentials excluded from git via `.gitignore`
+
+## Cleanup
+
+```bash
+bash scripts/70_destroy_all.sh --yes
+```
 
