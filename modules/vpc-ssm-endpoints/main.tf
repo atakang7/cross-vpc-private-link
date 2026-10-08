@@ -33,7 +33,7 @@ resource "aws_vpc_endpoint" "ssm" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ssm-endpoint" }
+  tags                = { Name = "${var.name}-ssm-endpoint" }
 }
 
 resource "aws_vpc_endpoint" "ssmmessages" {
@@ -43,7 +43,7 @@ resource "aws_vpc_endpoint" "ssmmessages" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ssmmessages-endpoint" }
+  tags                = { Name = "${var.name}-ssmmessages-endpoint" }
 }
 
 resource "aws_vpc_endpoint" "ec2messages" {
@@ -53,7 +53,7 @@ resource "aws_vpc_endpoint" "ec2messages" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ec2messages-endpoint" }
+  tags                = { Name = "${var.name}-ec2messages-endpoint" }
 }
 
 output "security_group_id" {

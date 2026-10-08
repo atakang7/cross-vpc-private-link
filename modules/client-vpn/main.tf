@@ -12,7 +12,7 @@ resource "aws_ec2_client_vpn_endpoint" "this" {
   description            = "${var.name} Client VPN Endpoint"
   server_certificate_arn = var.server_certificate_arn
   client_cidr_block      = var.client_cidr_block
-  split_tunnel           = true # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ec2_client_vpn_endpoint#split_tunnel-1
+  split_tunnel           = true
   dns_servers            = var.dns_servers
 
   authentication_options {
@@ -48,5 +48,10 @@ resource "aws_ec2_client_vpn_route" "route_vpc" {
   depends_on             = [aws_ec2_client_vpn_network_association.assoc]
 }
 
-output "endpoint_id" { value = aws_ec2_client_vpn_endpoint.this.id }
-output "dns_name"    { value = aws_ec2_client_vpn_endpoint.this.dns_name }
+output "endpoint_id" {
+  value = aws_ec2_client_vpn_endpoint.this.id
+}
+
+output "dns_name" {
+  value = aws_ec2_client_vpn_endpoint.this.dns_name
+}
