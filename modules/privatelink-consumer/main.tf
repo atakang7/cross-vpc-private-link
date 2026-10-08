@@ -13,11 +13,15 @@ resource "aws_security_group" "endpoint" {
     }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "egress" {
+    for_each = var.allow_cidrs
+    content {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = [egress.value]
+      description = "Only permitted consumer networks"
+    }
   }
 }
 

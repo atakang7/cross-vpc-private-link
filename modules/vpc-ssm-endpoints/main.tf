@@ -14,11 +14,15 @@ resource "aws_security_group" "ssm_endpoints" {
     }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "egress" {
+    for_each = var.allowed_cidrs
+    content {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = [egress.value]
+      description = "Only traffic to allowed VPC networks"
+    }
   }
 }
 
