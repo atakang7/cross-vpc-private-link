@@ -77,7 +77,13 @@ See [architecture, verification and troubleshooting](docs/operations.md) or the 
 
 ## Quality gates
 
-Pull requests run OpenTofu formatting/validation, shell syntax checks, and a Trivy IaC configuration scan. CI only validates source code: it does **not** use AWS credentials, plan against remote state, or provision infrastructure.
+Pull requests run OpenTofu formatting/validation, shell syntax checks, a Trivy IaC configuration scan, and an **offline integration smoke test**. The smoke test exercises the actual Bash deployment/teardown scripts against two mocked AWS accounts, generates real demo certificates, and runs the embedded Python HTTP backend through three local TCP proxies representing VPN ingress, a consumer interface endpoint and a provider NLB.
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+**Test boundary:** The sandbox verifies orchestration and application/data-path behavior, not AWS resource provisioning, actual PrivateLink internals, VPN tunnel negotiation, IAM permission enforcement or live Route 53 resolution. No AWS credentials or paid resources are required for these tests. A real two-account AWS integration deployment remains a separate validation step.
 
 Local equivalent (after installing OpenTofu):
 
