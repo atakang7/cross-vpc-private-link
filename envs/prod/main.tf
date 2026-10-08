@@ -15,19 +15,21 @@ module "ssm_endpoints" {
   allowed_cidrs      = ["10.20.0.0/16"]
 }
 
-variable "dev_account_root_arn" {
-  type    = string
-  default = "arn:aws:iam::471112589061:root"
-}
-
 module "privatelink_provider" {
   source             = "../../modules/privatelink-provider"
   name               = "prod-hello"
   vpc_id             = module.vpc.vpc_id
+  vpc_cidr           = "10.20.0.0/16"
   private_subnet_ids = module.vpc.private_subnet_ids
   port               = 8080
   allowed_principals = [var.dev_account_root_arn]
 }
 
-output "hello_world_service_name" { value = module.privatelink_provider.service_name }
-output "hello_world_demo_ip"      { value = module.privatelink_provider.demo_private_ip }
+output "hello_world_service_name" {
+  description = "Pass this value to the consumer stack; do not share the provider state."
+  value       = module.privatelink_provider.service_name
+}
+
+output "hello_world_demo_ip" {
+  value = module.privatelink_provider.demo_private_ip
+}

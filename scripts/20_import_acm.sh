@@ -2,24 +2,23 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PROFILE=${1:-dev}
+PROFILE=${1:-${DEV_PROFILE:-dev}}
+REGION=${AWS_REGION:-eu-central-1}
 CERT_DIR="$(pwd)/certs"
 
-if [[ ! -f "$CERT_DIR/server.crt" ]]; then
-  echo "Certs not found in $CERT_DIR; run 10_generate_certs.sh first" >&2
-  exit 1
-fi
+for file in server.crt server.key ca.crt ca.key; do
+  [[ -f "$CERT_DIR/$file" ]] || { echo "Missing $CERT_DIR/$file; generate certificates first." >&2; exit 1; }
+done
 
-SERVER_ARN=$(aws acm import-certificate --profile "$PROFILE" \
-  --certificate fileb://"$CERT_DIR/server.crt" \
-  --private-key fileb://"$CERT_DIR/server.key" \
-  --certificate-chain fileb://"$CERT_DIR/ca.crt" \
+SERVER_ARN=$(aws acm import-certificate --profile "$PROFILE" --region "$REGION" \
+  --certificate "fileb://$CERT_DIR/server.crt" \
+  --private-key "fileb://$CERT_DIR/server.key" \
+  --certificate-chain "fileb://$CERT_DIR/ca.crt" \
   --query CertificateArn --output text)
 
-CA_ARN=$(aws acm import-certificate --profile "$PROFILE" \
-  --certificate fileb://"$CERT_DIR/ca.crt" \
-  --private-key fileb://"$CERT_DIR/ca.key" \
+CA_ARN=$(aws acm import-certificate --profile "$PROFILE" --region "$REGION" \
+  --certificate "fileb://$CERT_DIR/ca.crt" \
+  --private-key "fileb://$CERT_DIR/ca.key" \
   --query CertificateArn --output text)
 
-echo "SERVER_ARN=$SERVER_ARN"
-echo "CA_ARN=$CA_ARN"
+printf 'SERVER_ARN=%s\nCA_ARN=%s\n' "$SERVER_ARN" "$CA_ARN"

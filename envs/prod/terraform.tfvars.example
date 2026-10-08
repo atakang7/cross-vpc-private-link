@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars for manual deployments (never commit real account values).
+dev_account_root_arn = "arn:aws:iam::123456789012:root"

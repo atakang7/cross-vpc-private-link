@@ -1,13 +1,13 @@
-name: Infra Security Scan
+name: IaC security scan
 
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 permissions:
-  actions: read
+  contents: read
   security-events: write
 
 jobs:
@@ -15,19 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Trivy IaC config scan
-        uses: aquasecurity/trivy-action@0.32.0 # or @latest if version issues
+      - name: Trivy misconfiguration scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
           format: sarif
           output: trivy-iac-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: 1
-
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
+          limit-severities-for-sarif: true
+          exit-code: '1'
+      - name: Explain HIGH/CRITICAL findings in workflow logs
+        if: failure()
+        run: trivy config --severity HIGH,CRITICAL --format table .
+      - name: Upload findings
+        if: always() && hashFiles('trivy-iac-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-iac-results.sarif

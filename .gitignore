@@ -1,34 +1,30 @@
-# Terraform
-**/.terraform.*
-.terraform/
+# Terraform / OpenTofu caches and state (lockfiles should be committed after init)
+**/.terraform/
 *.tfstate
 *.tfstate.*
-*.tfvars
+*.tfplan
 crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+**/backend.hcl
 .terraformrc
 terraform.rc
 
-# Certificates and Keys
-**/certs/
+# Credentials, VPN assets and generated certificates
+scripts/certs/
 **/*.crt
 **/*.key
 **/*.pem
 **/*.p12
 **/*.pfx
-
-# VPN Configuration
 *.ovpn
-*.conf
-
-# AWS Credentials
 .aws/
 **/credentials
 **/.env
 **/.env.*
 
-# Package files
-**/*.deb
-**/*.rpm
-
-# Logs
+# Local artifacts
 *.log
+*.deb
+*.rpm

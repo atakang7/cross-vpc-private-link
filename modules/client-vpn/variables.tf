@@ -4,15 +4,15 @@ variable "name" {
 }
 
 variable "vpc_id" {
-  type        = string
+  type = string
 }
 
 variable "subnet_ids" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "client_cidr_block" {
-  type        = string
+  type = string
 }
 
 variable "dns_servers" {
@@ -45,4 +45,3 @@ variable "target_vpc_subnet_id" {
   description = "The ID of the subnet to associate with the client VPN endpoint for route creation."
   type        = string
 }
-

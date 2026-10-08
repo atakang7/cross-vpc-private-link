@@ -1,0 +1,6 @@
+# Copy to backend.hcl; create this bucket and the lock table before running init.
+bucket         = "YOUR_PROD_STATE_BUCKET"
+key            = "cross-vpc-private-link/prod/terraform.tfstate"
+region         = "eu-central-1"
+dynamodb_table = "YOUR_PROD_LOCK_TABLE"
+encrypt        = true

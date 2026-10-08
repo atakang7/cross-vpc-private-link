@@ -14,11 +14,15 @@ resource "aws_security_group" "ssm_endpoints" {
     }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  dynamic "egress" {
+    for_each = var.allowed_cidrs
+    content {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = [egress.value]
+      description = "Only traffic to allowed VPC networks"
+    }
   }
 }
 
@@ -33,7 +37,7 @@ resource "aws_vpc_endpoint" "ssm" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ssm-endpoint" }
+  tags                = { Name = "${var.name}-ssm-endpoint" }
 }
 
 resource "aws_vpc_endpoint" "ssmmessages" {
@@ -43,7 +47,7 @@ resource "aws_vpc_endpoint" "ssmmessages" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ssmmessages-endpoint" }
+  tags                = { Name = "${var.name}-ssmmessages-endpoint" }
 }
 
 resource "aws_vpc_endpoint" "ec2messages" {
@@ -53,7 +57,7 @@ resource "aws_vpc_endpoint" "ec2messages" {
   subnet_ids          = local.subnet_ids
   security_group_ids  = [aws_security_group.ssm_endpoints.id]
   private_dns_enabled = true
-  tags = { Name = "${var.name}-ec2messages-endpoint" }
+  tags                = { Name = "${var.name}-ec2messages-endpoint" }
 }
 
 output "security_group_id" {

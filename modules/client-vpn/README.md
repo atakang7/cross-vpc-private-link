@@ -1,34 +1,9 @@
 # client-vpn
 
-Creates a certificate-authenticated AWS Client VPN endpoint with CloudWatch logs and subnet associations.
+Creates an AWS Client VPN endpoint with mutual certificate authentication, CloudWatch connection logging (30-day retention), authorization for `vpc_cidr`, and subnet associations. Split tunneling is enabled.
 
-Inputs
-- name (string)
-- vpc_id (string)
-- subnet_ids (list(string))
-- client_cidr_block (string)
-- dns_servers (list(string)) optional
-- vpc_cidr (string) used for authorization rule and optional route creation
-- server_certificate_arn (string)
-- root_ca_arn (string)
-- manage_vpc_route (bool) default true, set false if route to vpc_cidr is auto-created to avoid duplicate errors
+Inputs: `name`, `vpc_id`, `subnet_ids`, `client_cidr_block`, `dns_servers`, `vpc_cidr`, `server_certificate_arn`, `root_ca_arn`, `target_vpc_subnet_id`, `manage_vpc_route`.
 
-Outputs
-- endpoint_id
-- dns_name
+Outputs: `endpoint_id`, `dns_name`.
 
-Example
-```hcl
-module "client_vpn" {
-  source                = "../../modules/client-vpn"
-  name                  = "dev"
-  vpc_id                = module.vpc.vpc_id
-  subnet_ids            = module.vpc.private_subnet_ids
-  client_cidr_block     = var.client_cidr_block
-  dns_servers           = ["10.10.0.2"]
-  vpc_cidr              = "10.10.0.0/16"
-  manage_vpc_route      = true # set false if route already exists
-  server_certificate_arn = var.vpn_server_cert_arn
-  root_ca_arn            = var.vpn_root_ca_arn
-}
-```
+The root module sets `manage_vpc_route=false` because associations produce the local VPC route. A connected VPN client still needs correct OS DNS resolver configuration. The all-groups VPC authorization is suitable for a lab, **not** least-privilege production access.
