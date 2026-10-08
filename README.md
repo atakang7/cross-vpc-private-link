@@ -1,65 +1,43 @@
-# Cross-Account AWS PrivateLink
+# Cross-account AWS PrivateLink
 
-**A reproducible infrastructure lab for exposing a private service across AWS accounts, without VPC peering, public IPs, or a bastion host.**
+Private TCP service access across two AWS accounts, without VPC peering or public backend addresses. OpenTofu provisions the network and a small EC2 HTTP service for verification.
 
-A provider account publishes an internal TCP service through a Network Load Balancer (NLB) and VPC endpoint service. A consumer account reaches it through an interface endpoint, a Route 53 private DNS record, and an AWS Client VPN.
+![Cross-account PrivateLink network topology](img/architecture.svg)
 
-![Network architecture showing the provider NLB, endpoint service, consumer interface endpoint, and Client VPN](img/system_architecture.png)
+## Topology
 
-> **Scope:** Security-conscious reference implementation and learning project — **not** a production-ready application. The sample backend has one EC2 instance, speaks plaintext HTTP on port 8080, and uses locally generated demo certificates. See [production considerations](#security-and-limitations).
-
-## How traffic flows
-
-```text
-Remote developer
-   | AWS Client VPN + certificate
-   v
-Dev VPC (10.10.0.0/16)
-   | Route 53 private DNS: hello.internal.company
-   | Interface VPC endpoint (private ENIs)
-   v
-AWS PrivateLink (provider service allowlist)
-   v
-Prod VPC (10.20.0.0/16)
-   | Internal NLB -> target group -> demo EC2 :8080
-   v
-JSON response
-```
-
-**Why PrivateLink?** The consumer can reach only an explicitly published service, rather than obtaining routed access to the provider VPC as with peering. Access still depends on IAM/service permissions, security groups, application-layer controls, and the service owner's endpoint acceptance policy.
-
-| Component | Role |
+| Consumer (dev) | Provider (prod) |
 | --- | --- |
-| [`modules/vpc-core`](modules/vpc-core/) | Isolated VPC and private subnets in two AZs |
-| [`modules/privatelink-provider`](modules/privatelink-provider/) | Internal NLB, endpoint service, demo EC2 target |
-| [`modules/privatelink-consumer`](modules/privatelink-consumer/) | Interface endpoint, endpoint SG, Route 53 private record |
-| [`modules/client-vpn`](modules/client-vpn/) | Client VPN with certificate authentication and connection logs |
-| [`modules/vpc-ssm-endpoints`](modules/vpc-ssm-endpoints/) | Private AWS Systems Manager connectivity |
-| [`envs/prod`](envs/prod/) / [`envs/dev`](envs/dev/) | Independently owned infrastructure states |
+| Client VPN · Route 53 private zone · interface endpoint | Endpoint service · internal NLB · EC2 target |
+| `10.10.0.0/16` | `10.20.0.0/16` |
 
-## Deploy the lab
+`hello.internal.company:8080` resolves to the consumer endpoint. TCP traffic then traverses PrivateLink to the provider NLB and demo EC2 instance. DNS is a separate lookup, not a network hop.
 
-**Requirements:** Two different AWS accounts; AWS CLI v2 profiles named `prod` and `dev` (or set `PROD_PROFILE` / `DEV_PROFILE`); OpenTofu 1.10; OpenSSL; `curl`; a Linux shell. The deployed VPC endpoint, NLB, VPN, EC2, and other AWS resources **cost money**.
+Source: [network diagram (SVG)](img/architecture.svg). Details and failure checks: [operations](docs/operations.md).
 
-1. **Prepare state backends.** In each account, provision a versioned, private S3 state bucket and a DynamoDB lock table with a string partition key `LockID`. Copy `envs/prod/backend.hcl.example` to `envs/prod/backend.hcl`, and the corresponding file for dev. Fill in real backend names. These local configs are git-ignored.
-2. **Check identity.** Verify `aws sts get-caller-identity --profile prod` and `--profile dev` refer to different accounts. Profiles need permissions to manage the resources in this repository, the state bucket and lock table.
-3. **Run the interactive deployment.**
+## Deploy
+
+Requires two AWS accounts, AWS CLI profiles `dev` and `prod`, OpenTofu 1.10, OpenSSL and a Linux shell. **Resources incur AWS charges.**
+
+First, provision a private, versioned S3 state bucket and DynamoDB lock table (`LockID` string key) in **each** account. Configure the backend files:
 
 ```bash
+cp envs/dev/backend.hcl.example envs/dev/backend.hcl
+cp envs/prod/backend.hcl.example envs/prod/backend.hcl
+# Edit both backend.hcl files with actual bucket and lock table names.
+```
+
+Check the two identities, then run the guided deployment:
+
+```bash
+aws sts get-caller-identity --profile dev
+aws sts get-caller-identity --profile prod
 bash first-run.sh
 ```
 
-The script checks prerequisites and AWS identities, creates **demo-only** VPN certificates, imports them into ACM, applies the provider stack, passes its **service-name output** to the consumer stack, then exports `dev.ovpn`. It stops on failures and shows OpenTofu's approval prompts; it does **not** perform unattended applies.
+The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
 
-If you use non-default profiles:
-
-```bash
-DEV_PROFILE=dev-sandbox PROD_PROFILE=prod-sandbox bash first-run.sh
-```
-
-**Manual deployment:** Use [provider](envs/prod/README.md) and [consumer](envs/dev/README.md) instructions. The consumer takes a `privatelink_service_name` variable rather than reading the producer's full Terraform state. This is intentional to avoid cross-account access to sensitive infrastructure state.
-
-## Verify the path
+## Verify
 
 ```bash
 sudo openvpn --config dev.ovpn \
@@ -67,51 +45,33 @@ sudo openvpn --config dev.ovpn \
   --key scripts/certs/client.key \
   --ca scripts/certs/ca.crt
 
-# Run in another terminal after the VPN and private DNS are working:
+# In a second terminal:
 bash scripts/60_test_privateline.sh
 ```
 
-Expected response: a JSON object with `message: "Hello from provider"` and a UTC timestamp. If DNS doesn't resolve, confirm that your OS's VPN DNS integration is using the VPC resolver (`10.10.0.2`) for `internal.company`. **Do not permanently overwrite `/etc/resolv.conf`**; configure per-link/conditional DNS instead.
+Expected: JSON containing `"message": "Hello from provider"`. If DNS fails, check that the VPN client resolves `internal.company` using the dev VPC resolver (`10.10.0.2`). Do not overwrite system-wide `/etc/resolv.conf` to work around this.
 
-See [architecture, verification and troubleshooting](docs/operations.md) or the [companion walkthrough](docs/README.md).
-
-## Quality gates
-
-Pull requests run OpenTofu formatting/validation, shell syntax checks, a Trivy IaC configuration scan, and an **offline integration smoke test**. The smoke test exercises the actual Bash deployment/teardown scripts against two mocked AWS accounts, generates real demo certificates, and runs the embedded Python HTTP backend through three local TCP proxies representing VPN ingress, a consumer interface endpoint and a provider NLB.
-
-```bash
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-**Test boundary:** The sandbox verifies orchestration and application/data-path behavior, not AWS resource provisioning, actual PrivateLink internals, VPN tunnel negotiation, IAM permission enforcement or live Route 53 resolution. No AWS credentials or paid resources are required for these tests. A real two-account AWS integration deployment remains a separate validation step.
-
-Local equivalent (after installing OpenTofu):
+## Check locally
 
 ```bash
 tofu fmt -check -recursive
-tofu -chdir=envs/prod init -backend=false
-tofu -chdir=envs/prod validate
-tofu -chdir=envs/dev init -backend=false
-tofu -chdir=envs/dev validate
+tofu -chdir=envs/prod init -backend=false && tofu -chdir=envs/prod validate
+tofu -chdir=envs/dev init -backend=false && tofu -chdir=envs/dev validate
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-Commit generated `.terraform.lock.hcl` files after initial provider initialization to make provider selection repeatable.
-
-## Security and limitations
-
-- Private subnets have **no** internet gateway or NAT. The demo uses an Amazon Linux 2023 AMI with Python preinstalled, IMDSv2 required, and encrypted root storage.
-- The backend security group accepts the service port only from the **provider VPC CIDR**. Consumer endpoint ingress is limited to dev VPC and VPN client CIDRs; the service allows only the configured consumer account principal.
-- **No claim of zero trust:** the sample auto-accepts connections from allowed principals, authorizes certificate-authenticated VPN clients across the dev VPC, and uses plaintext demo HTTP. Production requires narrower identities/rules, app authentication, TLS end-to-end, endpoint approvals, observability, backups, and multiple healthy backend targets.
-- Terraform **state may contain sensitive data**. Backends are per-account and must be access-controlled, encrypted, and versioned. The consumer receives the provider's service name, not the provider state file.
-- Local private keys in `scripts/certs/` and downloaded VPN profiles must not be shared or committed; the example certificates are **not** for real users.
-- AWS PrivateLink and Client VPN incur ongoing hourly/data charges even while idle.
+CI additionally runs Trivy IaC checks. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
 
 ## Teardown
 
 ```bash
 bash scripts/70_destroy_all.sh
-# or, for deliberate non-interactive cleanup:
-bash scripts/70_destroy_all.sh --yes
 ```
 
-The consumer is destroyed before the provider. Imported ACM certificates and the separately provisioned S3/DynamoDB state infrastructure are **not** destroyed by this script. Remove them separately after confirming they are no longer in use.
+Destroys dev before prod. Imported ACM certificates and state backends remain for manual cleanup.
+
+## Limits
+
+This is a **reference lab**, not production infrastructure: one EC2 target, plaintext HTTP, automatically accepted allowlisted endpoints, broad VPC-level VPN authorization, and self-signed demo certificates. Use TLS, application auth, narrower access controls, redundant targets, and managed certificate lifecycle before using the pattern for a real workload.
+
+For stack-specific inputs, see [dev](envs/dev/README.md) and [prod](envs/prod/README.md).
