@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="835" viewBox="0 0 1600 835" role="img" aria-labelledby="title desc"><title id="title">Cross-account AWS PrivateLink architecture</title><desc id="desc">Remote developer connects via AWS Client VPN in the dev account to an interface endpoint. Private DNS resolution uses the VPC resolver and Route 53. Traffic crosses PrivateLink to the production endpoint service, internal NLB, and single EC2 demo target. No VPC peering.</desc><defs><style>
+text{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.bg{fill:#f8fafc}.account-box{fill:#fff;stroke:#cbd5e1;stroke-width:1.5}
+.node{fill:#fff;stroke:#94a3b8;stroke-width:1.5}.node-strip{fill:#0f766e}
+.dnsbox{fill:#eef2ff;stroke:#a5b4fc;stroke-width:1.2}
+.panel-num{font-weight:750;font-size:12px;letter-spacing:1.5px;fill:#64748b}
+.account{font-weight:700;font-size:21px;fill:#0f172a}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:14px;fill:#475569}
+.sub{font-size:13px;fill:#64748b}.title{font-weight:750;font-size:30px;fill:#0f172a}.subtitle{font-size:15px;fill:#475569}
+.node-kicker{font-size:10px;font-weight:700;letter-spacing:1.2px;fill:#0f766e}
+.node-title{font-size:17px;font-weight:700;fill:#0f172a}
+.node-sub{font-size:12px;fill:#475569}
+.minor{font-size:12px;fill:#475569}.micro{font-size:11px;fill:#64748b}
+.dns-head{font-weight:650;font-size:12px;fill:#4338ca}.dns-label{font-weight:650;font-size:14px;fill:#312e81}
+.label{font-weight:700;font-size:12px;fill:#0f766e;letter-spacing:0.8px}
+.foot-head{font-size:11px;letter-spacing:1px;fill:#64748b;font-weight:750}
+.foot-value{font-size:14px;fill:#0f172a;font-weight:600}
+.data{fill:none;stroke:#0f766e;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+.dns{fill:none;stroke:#6366f1;stroke-width:2;stroke-dasharray:5 5;stroke-linecap:round}
+.separator{fill:none;stroke:#cbd5e1;stroke-width:1.6;stroke-dasharray:6 6}
+.rule{stroke:#e2e8f0;stroke-width:1}
+</style>
+<marker id="arrow-data" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f766e"/></marker>
+<marker id="arrow-dns" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6366f1"/></marker>
+</defs><rect x="0" y="0" width="1600" height="835" rx="0" class="bg"/>
+<text x="48" y="44" class="panel-num">AWS / NETWORKING / REFERENCE ARCHITECTURE</text>
+<text x="48" y="91" class="title">Cross-account private service access</text>
+<text x="48" y="123" class="subtitle">Client VPN  ·  Private DNS  ·  PrivateLink  ·  Internal NLB</text>
+<text x="1550" y="56" class="mono" text-anchor="end">eu-central-1</text>
+<line x1="48" y1="157" x2="1552" y2="157" class="rule"/>
+<rect x="235" y="199" width="640" height="467" rx="10" class="account-box"/>
+<rect x="933" y="199" width="619" height="467" rx="10" class="account-box"/>
+<text x="260" y="227" class="panel-num">01  /  CONSUMER</text>
+<text x="955" y="227" class="panel-num">02  /  PROVIDER</text>
+<text x="260" y="248" class="account">Development account</text>
+<text x="260" y="275" class="mono">10.10.0.0/16</text>
+<text x="574" y="273" class="sub" text-anchor="start">VPC · private-only</text>
+<text x="955" y="248" class="account">Production account</text>
+<text x="955" y="275" class="mono">10.20.0.0/16</text>
+<text x="1269" y="273" class="sub" text-anchor="start">VPC · private-only</text>
+<line x1="260" y1="291" x2="849" y2="291" class="rule"/>
+<line x1="955" y1="291" x2="1525" y2="291" class="rule"/>
+<text x="263" y="320" class="dns-head">DNS RESOLUTION  /  NOT ON THE TCP PATH</text>
+<rect x="478" y="333" width="159" height="62" rx="6" class="dnsbox"/>
+<rect x="655" y="333" width="194" height="62" rx="6" class="dnsbox"/>
+<text x="492" y="359" class="dns-label">VPC resolver</text>
+<text x="492" y="380" class="mono">10.10.0.2</text>
+<text x="669" y="359" class="dns-label">Route 53 private zone</text>
+<text x="669" y="380" class="mono">internal.company</text>
+<path d="M392 430 V364 H468" class="dns" marker-end="url(#arrow-dns)"/>
+<line x1="637" y1="365" x2="649" y2="365" class="dns" marker-end="url(#arrow-dns)"/>
+<path d="M755 395 V427" class="dns" marker-end="url(#arrow-dns)"/>
+<text x="765" y="412" class="micro">A alias</text>
+<text x="49" y="400" class="panel-num">REMOTE USER</text>
+<rect x="46" y="430" width="153" height="93" rx="6" class="node"/>
+<text x="63" y="462" class="node-title">Developer</text>
+<text x="63" y="483" class="node-sub">OpenVPN client</text>
+<text x="63" y="503" class="node-sub">Laptop / remote</text>
+<rect x="283" y="430" width="189" height="93" rx="8" class="node"/>
+<rect x="283" y="430" width="5" height="93" rx="2" class="node-strip"/>
+<text x="300" y="456" class="node-kicker">ACCESS</text>
+<text x="300" y="487" class="node-title">AWS Client VPN</text>
+<text x="300" y="507" class="node-sub">172.16.0.0/22 clients</text>
+<rect x="623" y="430" width="219" height="93" rx="8" class="node"/>
+<rect x="623" y="430" width="5" height="93" rx="2" class="node-strip"/>
+<text x="640" y="456" class="node-kicker">CONSUMER</text>
+<text x="640" y="487" class="node-title">Interface endpoint</text>
+<text x="640" y="507" class="node-sub">ENIs across 2 private AZs</text>
+<rect x="957" y="430" width="172" height="93" rx="8" class="node"/>
+<rect x="957" y="430" width="5" height="93" rx="2" class="node-strip"/>
+<text x="974" y="456" class="node-kicker">PUBLISHED SERVICE</text>
+<text x="974" y="487" class="node-title">Endpoint service</text>
+<text x="974" y="507" class="node-sub">Allowlisted consumer</text>
+<rect x="1150" y="430" width="175" height="93" rx="8" class="node"/>
+<rect x="1150" y="430" width="5" height="93" rx="2" class="node-strip"/>
+<text x="1167" y="456" class="node-kicker">FORWARDING</text>
+<text x="1167" y="487" class="node-title">Internal NLB</text>
+<text x="1167" y="507" class="node-sub">TCP listener :8080</text>
+<rect x="1344" y="430" width="181" height="93" rx="8" class="node"/>
+<rect x="1344" y="430" width="5" height="93" rx="2" class="node-strip"/>
+<text x="1361" y="456" class="node-kicker">TARGET</text>
+<text x="1361" y="487" class="node-title">EC2 demo backend</text>
+<text x="1361" y="507" class="node-sub">HTTP :8080 · 1 target</text>
+<line x1="200" y1="476" x2="277" y2="476" class="data" marker-end="url(#arrow-data)"/>
+<line x1="473" y1="476" x2="616" y2="476" class="data" marker-end="url(#arrow-data)"/>
+<line x1="843" y1="476" x2="949" y2="476" class="data" marker-end="url(#arrow-data)"/>
+<line x1="1130" y1="476" x2="1143" y2="476" class="data" marker-end="url(#arrow-data)"/>
+<line x1="1326" y1="476" x2="1337" y2="476" class="data" marker-end="url(#arrow-data)"/>
+<path d="M904 306 V425 M904 537 V618" class="separator"/>
+<rect x="856" y="442" width="96" height="24" rx="4" class="bg"/>
+<text x="904" y="459" class="label" text-anchor="middle">PrivateLink</text>
+<line x1="260" y1="558" x2="849" y2="558" class="rule"/>
+<line x1="955" y1="558" x2="1525" y2="558" class="rule"/>
+<text x="283" y="586" class="foot-head">CLIENT VPN ASSOCIATIONS</text>
+<text x="283" y="610" class="minor">Two private subnets · eu-central-1a / 1b</text>
+<text x="283" y="632" class="minor">Private DNS maps hello.internal.company → VPCE</text>
+<text x="957" y="586" class="foot-head">NETWORK LOAD BALANCER</text>
+<text x="957" y="610" class="minor">NLB spans two AZs; cross-zone enabled</text>
+<text x="957" y="632" class="minor">Single EC2 target in one AZ (lab only)</text>
+<line x1="48" y1="694" x2="86" y2="694" class="data" marker-end="url(#arrow-data)"/>
+<text x="98" y="699" class="minor">TCP request / response</text>
+<line x1="308" y1="694" x2="343" y2="694" class="dns" marker-end="url(#arrow-dns)"/>
+<text x="354" y="699" class="minor">DNS lookup / alias</text>
+<text x="1550" y="699" class="minor" text-anchor="end">Dashed boundary = AWS account boundary</text>
+<line x1="48" y1="733" x2="1552" y2="733" class="rule"/>
+<text x="48" y="768" class="foot-head">REACHABILITY</text>
+<text x="48" y="793" class="foot-value">No peering or route between VPCs</text>
+<text x="568" y="768" class="foot-head">ENDPOINT ACCESS</text>
+<text x="568" y="793" class="foot-value">Provider principal allowlist + endpoint SG</text>
+<text x="1110" y="768" class="foot-head">LAB LIMITATIONS</text>
+<text x="1110" y="793" class="foot-value">Auto-accept · single target · HTTP</text></svg>
