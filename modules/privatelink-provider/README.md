@@ -6,4 +6,4 @@ Inputs: `name`, `vpc_id`, `vpc_cidr`, `private_subnet_ids`, `port` (default 8080
 
 Outputs: `service_name` and `demo_private_ip` (null if disabled).
 
-The backend SG only admits traffic from the provider VPC CIDR; it is **not** open to the internet. Endpoint acceptance is automatic for allowed principals **only in this lab**. Production requires explicit approval, app-layer TLS/authentication, and redundant targets.
+Cross-zone load balancing is enabled because this lab has only one demo target across an NLB spanning two AZs. This does not make the backend highly available. The backend SG only admits traffic from the provider VPC CIDR; it is **not** open to the internet. Endpoint acceptance is automatic for allowed principals **only in this lab**. Production requires explicit approval, app-layer TLS/authentication, and redundant targets.
