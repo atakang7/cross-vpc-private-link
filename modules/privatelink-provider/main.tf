@@ -80,12 +80,12 @@ resource "aws_instance" "demo" {
 }
 
 resource "aws_lb" "nlb" {
-  name               = "${var.name}-nlb"
-  internal           = true
+  name                             = "${var.name}-nlb"
+  internal                         = true
   load_balancer_type               = "network"
-  enable_cross_zone_load_balancing = true # One demo target in the first AZ; allow both NLB nodes to reach it.
-  subnets            = var.private_subnet_ids
-  tags               = { Name = "${var.name}-nlb" }
+  enable_cross_zone_load_balancing = true
+  subnets                          = var.private_subnet_ids
+  tags                             = { Name = "${var.name}-nlb" }
 }
 
 resource "aws_lb_target_group" "tg" {
