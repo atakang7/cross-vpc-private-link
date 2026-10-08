@@ -1,155 +1,78 @@
-# Secure internal service communication with PrivateLink
+# Secure cross-account connectivity with AWS PrivateLink
 
-## Introduction
+This walkthrough accompanies the [Cross-Account AWS PrivateLink reference lab](../README.md).
 
-Exposing internal services through internet is not suggested due to security reasons. Most of the enterprises construct their network on highly secured connections. These, usually, well maintained by cloud providers like AWS, Azure, GCP and all has their own similar solutions to the matter. In today's writing, I will be focusing on one of these solutions. AWS PrivateLink.
+## The problem
 
-## What is AWS PrivateLink
+A developer in one AWS account needs access to one internal service hosted in another account. Opening the service to the internet or building routed connectivity between entire VPCs grants more network reach than the use case requires.
 
-AWS PrivateLink helps customers to have connectivity between different VPC resources even in different regions. The data transfer is unidirectional and never leaves AWS-owned fiber network. Connectivity can be configured in different zones and regions. By enabling Cross-Zone Load Balancing you can allow the Network Load Balancer (NLB) to distribute traffic evenly across all registered targets in all enabled AZs, regardless of the AZ where the client is located.
+With **PrivateLink**, the provider publishes an endpoint service backed by an internal NLB. The consumer creates an **interface endpoint** in its VPC. Clients initiate connections to the provider's advertised service; responses travel back over that connection. No VPC peering route is needed.
 
-The concept is constructed around producer-consumer model where the producer sets up NLB, Target Group and VPC Service Provider. Consumer VPC setups VPC endpoint with Elastic Network Interface (ENI).
+![Architecture diagram](../img/system_architecture.png)
 
-## Prerequisites
+## The implementation
 
-To get started, you need to have two different AWS accounts to experiment together. Configure AWS credentials to start.
+**Provider account (prod):**
+- Private VPC, two private subnets, and VPC endpoints for Systems Manager.
+- Internal NLB, TCP listener, target group, a single demo EC2 backend.
+- An endpoint service restricted to a named consumer AWS account principal.
 
-Clone the repository:
-```bash
-git clone https://github.com/atakang7/cross-vpc-private-link.git
-```
+**Consumer account (dev):**
+- Private VPC and an interface endpoint for that published service.
+- Route 53 private hosted zone `internal.company` with `hello.internal.company` pointing to the interface endpoint.
+- Certificate-authenticated Client VPN for remote access, with VPC resolver `10.10.0.2` advertised as DNS.
 
-Run the script:
-```bash
-❯ bash first-run.sh
-```
+The AWS-managed infrastructure is provisioned with **OpenTofu**. The consumer receives only the provider's exported **service name**, not access to the production Terraform state bucket.
 
-## Script Execution Flow
+## Reproduce the lab
 
-After running the script, it will do the following:
-
-### 1. Scripts/00_check_prereqs.sh
-
-Checks script prerequisites: tofu (ex-terraform), aws, openssl.
-
-- **Tofu** is OSS fork of Terraform - almost everything is the same as before
-- **AWS** is the AWS CLI for managing resources
-- **OpenSSL** needed to generate VPN certificates
-
-### 2. Scripts/10_generate_certs.sh
-
-Creates VPN certificates:
-
-- **CA certificate** (ca.crt) - Root certificate authority for signing
-- **Server certificate** (server.crt) - Authenticates the VPN endpoint
-- **Client certificate** (client.crt) - Authenticates VPN clients
-
-### 3. Scripts/20_import_acm.sh
-
-Imports generated certificates to AWS Certificate Manager in dev account:
-
-
-- **Server cert + CA chain** - Required for VPN endpoint SSL termination
-- **Root CA cert** - Used for client certificate validation
-- **Returns ARNs** - Certificate ARNs passed to Terraform for VPN configuration
-
-### 4. Scripts/30_deploy_prod.sh
-
-Deploys provider infrastructure in production account:
-
-- **VPC + private subnets** - Isolated network environment
-- **Network Load Balancer** - Routes traffic to backend services
-- **VPC Endpoint Service** - Exposes NLB via PrivateLink
-- **Demo application** - Simple HTTP service for testing
-
-### 5. Scripts/40_deploy_dev.sh
-
-Deploys consumer infrastructure in development account:
-
-- **Consumer VPC** - Separate network for development
-- **Interface VPC Endpoint** - Connects to prod PrivateLink service
-
-
-
-- **Route53 private zone** - Custom DNS (hello.internal.company)
-- **Client VPN endpoint** - Certificate-based remote access
-
-### 6. Scripts/50_export_vpn_config.sh
-
-Exports OpenVPN configuration file:
-
-- **Downloads .ovpn file** - From AWS Client VPN endpoint
-- **Includes endpoint details** - Server address, protocol, port
-- **Ready for client** - Use with OpenVPN client + certificates
-
-### 7. Scripts/60_test_privateline.sh
-
-Tests PrivateLink connectivity:
-
-- **Curls private service** - http://hello.internal.company:8080
-- **Validates DNS resolution** - Route53 private zone working
-- **Confirms end-to-end** - VPN → private DNS → PrivateLink → backend
-
-### 8. Scripts/70_destroy_all.sh
-
-Clean teardown of all resources:
-
-- **Dev environment first** - Removes consumer dependencies
-- **Prod environment second** - Safely removes provider resources
-- **Prevents dependency errors** - Proper destruction order matters
-
-## Testing the Connection
-
-After first_run.sh script completes, connect to VPN with your certificate.
+The [root README](../README.md#deploy-the-lab) contains requirements, backend setup, cost warnings and the interactive entry point:
 
 ```bash
-❯ sudo openvpn --config ./dev.ovpn --cert scripts/certs/client.crt --key scripts/certs/client.key --ca scripts/certs/ca.crt
+bash first-run.sh
 ```
 
-Successful connection:
-```
-...
-2025-09-15 01:15:40 Incoming Data Channel: Cipher 'AES-256-GCM' initialized with 256 bit key
-2025-09-15 01:15:40 net_route_v4_best_gw query: dst 0.0.0.0
-2025-09-15 01:15:40 net_route_v4_best_gw result: via 192.168.1.1 dev wlp0s20f3
-2025-09-15 01:15:40 ROUTE_GATEWAY 192.168.1.1/255.255.255.0 IFACE=wlp0s20f3 HWADDR=90:cc:df:08:3a:81
-2025-09-15 01:15:40 TUN/TAP device tun0 opened
-2025-09-15 01:15:40 net_iface_mtu_set: mtu 1500 for tun0
-2025-09-15 01:15:40 net_iface_up: set tun0 up
-2025-09-15 01:15:40 net_addr_v4_add: 172.16.0.2/27 dev tun0
-2025-09-15 01:15:40 net_route_v4_add: 10.10.0.0/16 via 172.16.0.1 dev [NULL] table 0 metric -1
-2025-09-15 01:15:40 Initialization Sequence Completed
-```
+It verifies AWS profiles, generates local **demo** certificates, imports the certificates into ACM, deploys the provider and consumer stacks (showing approval prompts), and exports `dev.ovpn`.
 
-Try to connect to hello.internal.company:8080.
+After deployment:
 
 ```bash
-❯ curl hello.internal.company:8080
-curl: (6) Could not resolve host: hello.internal.company
+sudo openvpn --config dev.ovpn \
+  --cert scripts/certs/client.crt \
+  --key scripts/certs/client.key \
+  --ca scripts/certs/ca.crt
 ```
 
-Add DNS server to /etc/resolv.conf.
-```
-nameserver 10.10.0.2
-```
+In another terminal, after the VPN is connected and its DNS is configured:
 
-Try again.
 ```bash
-❯ curl hello.internal.company:8080
-{"message": "Hello from provider", "ts": "2025-09-14T22:19:10.640669"}
+bash scripts/60_test_privateline.sh
 ```
 
-## Learning Points
+Expected payload:
 
-- Be careful not to overlap CIDRs for your VPN and between VPCs.
-- If DNS resolution should only be resolved by the company, set split_tunnel to false.
-
-```hcl
-resource "aws_ec2_client_vpn_endpoint" "this" {
-  ...
-  split_tunnel = true
-  ...
-}
+```json
+{"message":"Hello from provider","ts":"2026-10-08T20:00:00+00:00"}
 ```
 
-Peace ;)
+The timestamp is generated by the service; this is an *example* payload.
+
+## What can fail?
+
+- A PrivateLink endpoint can be created but stay unavailable if the provider has not allowed or accepted it.
+- The endpoint can resolve through Route 53 while the NLB has **zero healthy targets**.
+- A Client VPN tunnel can be established while Linux or macOS continues using the wrong DNS resolver for private zones. Client VPN split tunneling does **not** automatically configure conditional DNS on every operating system.
+- An EC2 instance inside private subnets without NAT cannot download bootstrap packages; this lab uses an AMI with a preinstalled Python runtime instead.
+- An interface endpoint limits *network reach*, not application permissions. TLS and application identity are separate concerns.
+
+For detailed failure checks and deployment dependencies, see [operations](operations.md).
+
+## Cleanup and scope
+
+```bash
+bash scripts/70_destroy_all.sh
+```
+
+The script destroys dev first, then prod. Imported ACM certificates, local demo private keys and independently managed state backends need separate lifecycle management.
+
+This is an educational architecture, **not** a claim of full production hardening: the demo runs a single HTTP target, permissive VPN VPC authorization, and automatic acceptance for already-allowed provider principals.
