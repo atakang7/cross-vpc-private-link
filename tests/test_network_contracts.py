@@ -21,7 +21,7 @@ class NetworkContractTests(unittest.TestCase):
     def test_vpn_egress_targets_published_endpoint(self):
         client = (ROOT / "modules/client-vpn/main.tf").read_text()
         consumer = (ROOT / "envs/dev/main.tf").read_text()
-        self.assertIn('toset(var.allowed_application_security_group_ids)', client)
+        self.assertIn('toset(var.allowed_app_sg_ids)', client)
         self.assertIn('security_groups = [egress.value]', client)
         self.assertIn('module.privatelink_consumer.endpoint_security_group_id', consumer)
         self.assertNotRegex(client, r'(?m)^\s*cidr_blocks\s*=\s*\["0\.0\.0\.0/0"\]')
