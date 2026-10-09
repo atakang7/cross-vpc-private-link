@@ -45,3 +45,15 @@ variable "target_vpc_subnet_id" {
   description = "The ID of the subnet to associate with the client VPN endpoint for route creation."
   type        = string
 }
+
+variable "application_port" {
+  description = "Port exposed by the authorized private application."
+  type        = number
+  default     = 8080
+}
+
+variable "allowed_application_security_group_ids" {
+  description = "Target security groups the VPN may connect to on application_port."
+  type        = list(string)
+  default     = []
+}
