@@ -1,3 +1,40 @@
+# Do not inherit the VPC default security group for Client VPN associations.
+# Permit only private DNS and the explicitly selected application endpoint.
+resource "aws_security_group" "client_vpn" {
+  name        = "${var.name}-client-vpn"
+  description = "Client VPN egress to private DNS and the published application"
+  vpc_id      = var.vpc_id
+
+  egress {
+    description = "VPC resolver (UDP)"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "VPC resolver (TCP)"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  dynamic "egress" {
+    for_each = toset(var.allowed_application_security_group_ids)
+    content {
+      description     = "Published application TCP endpoint"
+      from_port       = var.application_port
+      to_port         = var.application_port
+      protocol        = "tcp"
+      security_groups = [egress.value]
+    }
+  }
+
+  tags = { Name = "${var.name}-client-vpn" }
+}
+
 resource "aws_cloudwatch_log_group" "vpn" {
   name              = "/aws/client-vpn/${var.name}"
   retention_in_days = 30
@@ -14,6 +51,8 @@ resource "aws_ec2_client_vpn_endpoint" "this" {
   client_cidr_block      = var.client_cidr_block
   split_tunnel           = true
   dns_servers            = var.dns_servers
+  vpc_id                 = var.vpc_id
+  security_group_ids     = [aws_security_group.client_vpn.id]
 
   authentication_options {
     type                       = "certificate-authentication"
