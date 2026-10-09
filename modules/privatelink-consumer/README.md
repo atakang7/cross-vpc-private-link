@@ -17,6 +17,7 @@ Outputs
 - endpoint_id
 - endpoint_dns
 - private_dns_name (null if disabled)
+- endpoint_security_group_id
 
 Example
 ```hcl
@@ -25,7 +26,7 @@ module "consumer" {
   name              = "dev-hello"
   vpc_id            = module.vpc.vpc_id
   subnet_ids        = module.vpc.private_subnet_ids
-  service_name      = data.terraform_remote_state.prod.outputs.hello_world_service_name
+  service_name      = var.privatelink_service_name
   allow_cidrs       = ["10.10.0.0/16", var.client_cidr_block]
   private_zone_name = "internal.company"
   record_name       = "hello"
