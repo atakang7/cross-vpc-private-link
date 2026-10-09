@@ -60,7 +60,7 @@ tofu -chdir=envs/dev init -backend=false && tofu -chdir=envs/dev validate
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-CI additionally runs Trivy IaC checks. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
+CI also runs a mocked OpenTofu VPN plan, Trivy IaC checks, and browser-renders the architecture SVG. Committed provider lockfiles pin dependency checksums; update them deliberately with `tofu init -upgrade`. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
 
 ## Teardown
 
