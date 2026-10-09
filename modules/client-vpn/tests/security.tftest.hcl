@@ -42,7 +42,7 @@ run "private_application_only" {
   assert {
     condition = alltrue([
       for rule in aws_security_group.client_vpn.egress :
-      !contains(rule.cidr_blocks, "0.0.0.0/0")
+      !contains(rule.cidr_blocks == null ? [] : rule.cidr_blocks, "0.0.0.0/0")
     ])
     error_message = "Client VPN association must not have unrestricted IPv4 egress."
   }
