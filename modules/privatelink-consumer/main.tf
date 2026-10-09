@@ -65,3 +65,7 @@ output "endpoint_dns" {
 output "private_dns_name" {
   value = var.create_private_dns ? "${var.record_name}.${var.private_zone_name}" : null
 }
+
+output "endpoint_security_group_id" {
+  value = aws_security_group.endpoint.id
+}
