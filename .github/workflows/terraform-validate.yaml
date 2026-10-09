@@ -18,17 +18,7 @@ jobs:
         with:
           tofu_version: 1.10.0
       - name: OpenTofu format
-        run: |
-          tofu fmt -recursive
-          if ! git diff --quiet -- '*.tf'; then
-            for file in $(git diff --name-only -- '*.tf'); do
-              echo "TF_FORMAT_BEGIN:$file"
-              base64 -w 0 "$file"
-              echo
-              echo "TF_FORMAT_END:$file"
-            done
-            exit 1
-          fi
+        run: tofu fmt -check -recursive
       - name: Shell syntax
         run: |
           bash -n first-run.sh
@@ -54,14 +44,7 @@ jobs:
           tofu_version: 1.10.0
       - name: Initialize without accessing AWS state
         working-directory: ${{ matrix.envdir }}
-        run: tofu init -backend=false -input=false
-      - name: Print provider lockfile for review
-        working-directory: ${{ matrix.envdir }}
-        run: |
-          echo "TOFU_LOCK_BEGIN:${{ matrix.envdir }}"
-          base64 -w 0 .terraform.lock.hcl
-          echo
-          echo "TOFU_LOCK_END:${{ matrix.envdir }}"
+        run: tofu init -backend=false -input=false -lockfile=readonly
       - name: Validate modules and stack
         working-directory: ${{ matrix.envdir }}
         run: tofu validate -no-color
