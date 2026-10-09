@@ -62,3 +62,36 @@ jobs:
           tofu -chdir=modules/client-vpn init -backend=false -lockfile=readonly -input=false
       - name: Validate VPN resource plans without AWS credentials
         run: tofu -chdir=modules/client-vpn test -no-color
+
+  diagram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate architectural SVG
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root = ET.parse("img/architecture.svg").getroot()
+          assert root.tag.endswith("svg")
+          assert root.attrib.get("viewBox")
+          assert root.attrib.get("aria-labelledby")
+          print("Architecture diagram is valid and accessible.")
+          PY
+      - name: Render diagram in Chromium
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium)"
+          "$CHROME" --headless --no-sandbox --disable-gpu \
+            --window-size=1600,835 --screenshot="$RUNNER_TEMP/architecture.png" \
+            "file://$GITHUB_WORKSPACE/img/architecture.svg"
+          echo 'ARCH_DIAGRAM_PNG_BEGIN'
+          base64 -w 0 "$RUNNER_TEMP/architecture.png"
+          echo
+          echo 'ARCH_DIAGRAM_PNG_END'
+          cp "$RUNNER_TEMP/architecture.png" architecture-preview.png
+      - name: Upload diagram rendering
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-preview
+          path: architecture-preview.png
+          retention-days: 14
