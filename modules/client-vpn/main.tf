@@ -22,11 +22,11 @@ resource "aws_security_group" "client_vpn" {
   }
 
   dynamic "egress" {
-    for_each = toset(var.allowed_application_security_group_ids)
+    for_each = toset(var.allowed_app_sg_ids)
     content {
       description     = "Published application TCP endpoint"
-      from_port       = var.application_port
-      to_port         = var.application_port
+      from_port       = var.app_port
+      to_port         = var.app_port
       protocol        = "tcp"
       security_groups = [egress.value]
     }
