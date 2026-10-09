@@ -35,7 +35,7 @@ aws sts get-caller-identity --profile prod
 bash first-run.sh
 ```
 
-The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
+The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. A dedicated Client VPN security group permits private DNS and TCP/8080 only to the interface endpoint. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
 
 ## Verify
 
