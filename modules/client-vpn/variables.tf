@@ -46,14 +46,14 @@ variable "target_vpc_subnet_id" {
   type        = string
 }
 
-variable "application_port" {
+variable "app_port" {
   description = "Port exposed by the authorized private application."
   type        = number
   default     = 8080
 }
 
-variable "allowed_application_security_group_ids" {
-  description = "Target security groups the VPN may connect to on application_port."
+variable "allowed_app_sg_ids" {
+  description = "Target security groups the VPN may connect to on app_port."
   type        = list(string)
   default     = []
 }
