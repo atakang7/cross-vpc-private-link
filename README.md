@@ -35,7 +35,7 @@ aws sts get-caller-identity --profile prod
 bash first-run.sh
 ```
 
-The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
+The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. A dedicated Client VPN security group permits private DNS and TCP/8080 only to the interface endpoint. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
 
 ## Verify
 
@@ -60,7 +60,7 @@ tofu -chdir=envs/dev init -backend=false && tofu -chdir=envs/dev validate
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-CI additionally runs Trivy IaC checks. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
+CI also runs a mocked OpenTofu VPN plan, Trivy IaC checks, and browser-renders the architecture SVG. Committed provider lockfiles pin dependency checksums; update them deliberately with `tofu init -upgrade`. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
 
 ## Teardown
 

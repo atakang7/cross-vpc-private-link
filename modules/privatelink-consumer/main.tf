@@ -50,7 +50,7 @@ resource "aws_route53_record" "record" {
   alias {
     name                   = aws_vpc_endpoint.this.dns_entry[0].dns_name
     zone_id                = aws_vpc_endpoint.this.dns_entry[0].hosted_zone_id
-    evaluate_target_health = true
+    evaluate_target_health = false
   }
 }
 
@@ -64,4 +64,8 @@ output "endpoint_dns" {
 
 output "private_dns_name" {
   value = var.create_private_dns ? "${var.record_name}.${var.private_zone_name}" : null
+}
+
+output "endpoint_security_group_id" {
+  value = aws_security_group.endpoint.id
 }

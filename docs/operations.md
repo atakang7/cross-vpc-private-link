@@ -26,7 +26,7 @@ Use `bash first-run.sh` for steps 2–5. Applies remain interactive.
 
 - No NAT/IGW. Private EC2 bootstrap uses Python already present on Amazon Linux 2023.
 - NLB spans two AZs with cross-zone forwarding; there is only **one** EC2 demo target.
-- Provider acceptance is automatic for allowed principals. VPN authorization spans the dev VPC.
+- Provider acceptance is automatic for allowed principals. VPN authorization spans the dev VPC, but a dedicated Client VPN association security group limits egress to private DNS and the PrivateLink endpoint.
 - Demo uses plaintext HTTP, locally generated keys, and no application authentication.
 - Two remote state stores are separately managed; no cross-account state read is required.
 
