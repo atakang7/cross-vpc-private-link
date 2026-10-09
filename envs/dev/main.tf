@@ -40,8 +40,8 @@ module "client_vpn" {
   server_certificate_arn = var.vpn_server_cert_arn
   root_ca_arn            = var.vpn_root_ca_arn
   manage_vpc_route       = false
-  application_port       = 8080
-  allowed_application_security_group_ids = [module.privatelink_consumer.endpoint_security_group_id]
+  app_port       = 8080
+  allowed_app_sg_ids = [module.privatelink_consumer.endpoint_security_group_id]
 }
 
 output "private_dns_hello" {
