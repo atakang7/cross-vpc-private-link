@@ -1,34 +1,36 @@
+Part of [cross-vpc-private-link](../../README.md).
+
 # privatelink-consumer
 
-Creates an Interface VPC Endpoint to a provider service and optional private DNS record.
+Creates an interface VPC endpoint and, by default, a private Route 53 alias for the provider service.
 
-Inputs
-- name (string)
-- vpc_id (string)
-- subnet_ids (list(string))
-- service_name (string)
-- port (number) default 8080
-- allow_cidrs (list(string)) optional
-- create_private_dns (bool) default true
-- private_zone_name (string) default internal.company
-- record_name (string) default hello
+## Run
 
-Outputs
-- endpoint_id
-- endpoint_dns
-- private_dns_name (null if disabled)
-- endpoint_security_group_id
+The [dev stack](../../envs/dev/README.md) applies this module.
 
-Example
-```hcl
-module "consumer" {
-  source            = "../../modules/privatelink-consumer"
-  name              = "dev-hello"
-  vpc_id            = module.vpc.vpc_id
-  subnet_ids        = module.vpc.private_subnet_ids
-  service_name      = var.privatelink_service_name
-  allow_cidrs       = ["10.10.0.0/16", var.client_cidr_block]
-  private_zone_name = "internal.company"
-  record_name       = "hello"
-}
+## Test
+
+```bash
+tofu -chdir=modules/privatelink-consumer init -backend=false
+tofu -chdir=modules/privatelink-consumer validate
 ```
+
+## Config
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `name` | required | Resource prefix |
+| `vpc_id` | required | Consumer VPC |
+| `subnet_ids` | required | Endpoint ENI subnets |
+| `service_name` | required | Published endpoint service |
+| `port` | `8080` | Endpoint ingress TCP port |
+| `allow_cidrs` | `[]` | Endpoint security group CIDRs |
+| `create_private_dns` | `true` | Create private zone and alias |
+| `private_zone_name` | `internal.company` | Private hosted zone |
+| `record_name` | `hello` | A record label |
+
+## Interfaces
+
+Outputs: `endpoint_id`, `endpoint_dns`, `private_dns_name`, `endpoint_security_group_id`.
+
+The alias targets the endpoint DNS name. AWS-managed private DNS is disabled.
