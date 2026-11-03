@@ -22,3 +22,9 @@ variable "vpn_dns_servers" {
   type    = list(string)
   default = ["10.10.0.2"]
 }
+
+variable "aws_region" {
+  description = "AWS region for the VPC and endpoint resources."
+  type        = string
+  default     = "eu-central-1"
+}

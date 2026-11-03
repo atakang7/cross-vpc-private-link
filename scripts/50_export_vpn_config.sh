@@ -5,7 +5,8 @@ umask 077
 
 PROFILE=${1:-${DEV_PROFILE:-dev}}
 OUT=${2:-dev.ovpn}
-REGION=${3:-eu-central-1}
+REGION=${3:-${AWS_REGION:-eu-central-1}}
+export TF_VAR_aws_region="$REGION"
 VPN_ENDPOINT_ID=$(AWS_PROFILE="$PROFILE" tofu -chdir=envs/dev output -raw vpn_endpoint)
 [[ -n "$VPN_ENDPOINT_ID" ]] || { echo "No Client VPN endpoint in dev state." >&2; exit 1; }
 
