@@ -4,7 +4,6 @@ cd "$(dirname "$0")/.."
 
 PROD_PROFILE=${PROD_PROFILE:-prod}
 DEV_PROFILE=${DEV_PROFILE:-dev}
-export TF_VAR_aws_region="${AWS_REGION:-eu-central-1}"
 
 [[ -f envs/prod/backend.hcl ]] || { echo "Configure envs/prod/backend.hcl first." >&2; exit 1; }
 DEV_ACCOUNT_ID=$(aws sts get-caller-identity --profile "$DEV_PROFILE" --query Account --output text)

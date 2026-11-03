@@ -20,5 +20,3 @@ You can run `DEV_PROFILE=dev PROD_PROFILE=prod bash scripts/30_deploy_prod.sh` a
 The provider output `hello_world_service_name` is passed explicitly to the consumer stack. Do not give the consumer account read access to the production state just to obtain it.
 
 The demo uses one EC2 target and plaintext HTTP; see [production limitations](../../README.md#limits).
-
-For manual deployment outside `eu-central-1`, export `TF_VAR_aws_region` before running OpenTofu. The deployment script reads `AWS_REGION` instead.
