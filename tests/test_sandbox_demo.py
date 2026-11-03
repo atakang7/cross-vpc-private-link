@@ -168,6 +168,22 @@ class SandboxDemo(unittest.TestCase):
             self.assertNotEqual(invalid.returncode, 0)
             self.assertFalse(any('tofu apply' in e for e in audit.read_text().splitlines()))
 
+    def test_partial_certificate_set_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            scripts = Path(directory) / 'scripts'
+            scripts.mkdir()
+            shutil.copy2(ROOT / 'scripts/generate-vpn-certs.sh',
+                         scripts / 'generate-vpn-certs.sh')
+            certs = scripts / 'certs'
+            certs.mkdir()
+            (certs / 'ca.key').write_text('existing key')
+            run = subprocess.run(['bash', str(scripts / 'generate-vpn-certs.sh')],
+                                 capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn('Incomplete certificate set', run.stderr)
+            self.assertEqual((certs / 'ca.key').read_text(), 'existing key')
+            self.assertFalse((certs / 'ca.crt').exists())
+
     def test_live_demo_backend_through_three_local_tcp_hops(self):
         template = (ROOT / 'modules/privatelink-provider/bootstrap.sh.tftpl').read_text()
         match = re.search(r"cat > /opt/hello_world\.py <<'PY'\n(.*?)\nPY", template, re.S)
