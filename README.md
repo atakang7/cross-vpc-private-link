@@ -22,6 +22,12 @@ bash scripts/60_test_privateline.sh
 
 Run the VPN connection and HTTP test in separate terminals.
 
+CI on pull requests:
+
+```text
+pull_request -> lint + offline tests + tofu validate + VPN mock plan + SVG render + Trivy
+```
+
 ## Layout
 
 | Path | What it is |
