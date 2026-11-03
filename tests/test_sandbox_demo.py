@@ -27,7 +27,8 @@ import os, sys
 args = sys.argv[1:]
 profile = args[args.index('--profile') + 1] if '--profile' in args else os.environ.get('AWS_PROFILE', '')
 with open(os.environ['DEMO_AUDIT'], 'a') as file:
-    file.write(f'aws {args[0]} {args[1]} profile={profile}\n')
+    region = args[args.index('--region') + 1] if '--region' in args else '-'
+    file.write(f'aws {args[0]} {args[1]} profile={profile} region={region}\n')
 if args[:2] == ['sts', 'get-caller-identity']:
     assert profile in ('dev', 'prod'), profile
     print('123456789012' if profile == 'dev' or os.environ.get('DEMO_SAME_ACCOUNT') else '210987654321')
@@ -52,7 +53,7 @@ stack = chdir.rsplit('/', 1)[-1]
 verb = next((arg for arg in args if arg in ('init', 'apply', 'output', 'destroy')), '')
 profile = os.environ.get('AWS_PROFILE', '')
 with open(os.environ['DEMO_AUDIT'], 'a') as file:
-    file.write(f'tofu {verb} stack={stack} profile={profile} args={" ".join(args)}\n')
+    file.write(f'tofu {verb} stack={stack} profile={profile} region={os.environ.get("TF_VAR_aws_region", "")} args={" ".join(args)}\n')
 assert profile == stack, f'wrong account: {profile=} {stack=}'
 assert verb, args
 if verb == 'init':
@@ -138,7 +139,8 @@ class SandboxDemo(unittest.TestCase):
             audit = work / 'audit.log'
             audit.touch()
             env = dict(os.environ, PATH=str(mockbin) + os.pathsep + os.environ['PATH'],
-                       DEMO_AUDIT=str(audit), DEV_PROFILE='dev', PROD_PROFILE='prod')
+                       DEMO_AUDIT=str(audit), DEV_PROFILE='dev', PROD_PROFILE='prod',
+                       AWS_REGION='us-east-1')
             if os.geteuid() == 0:
                 for node in [work, *work.rglob('*')]:
                     os.chown(node, 65534, 65534)
@@ -148,6 +150,9 @@ class SandboxDemo(unittest.TestCase):
             provider = next(i for i, e in enumerate(events) if 'tofu apply stack=prod profile=prod' in e)
             consumer = next(i for i, e in enumerate(events) if 'tofu apply stack=dev profile=dev' in e)
             self.assertLess(provider, consumer)
+            self.assertTrue(all('region=us-east-1' in e for e in events
+                                if e.startswith('tofu ') or e.startswith('aws acm ')
+                                or e.startswith('aws ec2 ')))
             self.assertTrue((repo / 'dev.ovpn').exists())
             self.assertEqual((repo / 'dev.ovpn').stat().st_mode & 0o777, 0o600)
             self.assertTrue((repo / 'scripts/certs/client.crt').exists())

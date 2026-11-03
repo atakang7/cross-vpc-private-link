@@ -5,7 +5,7 @@ module "vpc" {
   name                 = "dev"
   vpc_cidr             = "10.10.0.0/16"
   private_subnet_cidrs = ["10.10.0.0/17", "10.10.128.0/17"]
-  azs                  = ["eu-central-1a", "eu-central-1b"]
+  azs                  = ["${var.aws_region}a", "${var.aws_region}b"]
 }
 
 module "ssm_endpoints" {
@@ -13,7 +13,7 @@ module "ssm_endpoints" {
   name               = "dev"
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
-  region             = "eu-central-1"
+  region             = var.aws_region
   allowed_cidrs      = ["10.10.0.0/16"]
 }
 

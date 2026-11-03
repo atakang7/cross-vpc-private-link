@@ -7,3 +7,9 @@ variable "dev_account_root_arn" {
     error_message = "Provide the consumer account root ARN, e.g. arn:aws:iam::123456789012:root."
   }
 }
+
+variable "aws_region" {
+  description = "AWS region for the VPC and endpoint resources."
+  type        = string
+  default     = "eu-central-1"
+}

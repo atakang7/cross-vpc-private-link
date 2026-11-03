@@ -4,6 +4,7 @@ cd "$(dirname "$0")"
 
 DEV_PROFILE=${DEV_PROFILE:-dev}
 PROD_PROFILE=${PROD_PROFILE:-prod}
+export TF_VAR_aws_region="${AWS_REGION:-eu-central-1}"
 
 if (( EUID == 0 )); then
   echo "Run as a regular user, not root/sudo." >&2

@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DEV_PROFILE=${DEV_PROFILE:-dev}
+export TF_VAR_aws_region="${AWS_REGION:-eu-central-1}"
 SERVER_ARN=${1:-${SERVER_ARN:-}}
 CA_ARN=${2:-${CA_ARN:-}}
 SERVICE_NAME=${3:-${SERVICE_NAME:-}}
