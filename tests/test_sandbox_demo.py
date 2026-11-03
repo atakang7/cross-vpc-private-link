@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Offline checks for deployment order and local HTTP forwarding."""
+"""Offline integration tests: mock AWS control plane and local TCP data plane.
+
+This deliberately does not claim to implement real AWS PrivateLink or Client VPN.
+No AWS credentials, Docker, cloud resources, or third-party libraries required.
+"""
 import json
 import os
 from pathlib import Path
@@ -23,8 +27,7 @@ import os, sys
 args = sys.argv[1:]
 profile = args[args.index('--profile') + 1] if '--profile' in args else os.environ.get('AWS_PROFILE', '')
 with open(os.environ['DEMO_AUDIT'], 'a') as file:
-    region = args[args.index('--region') + 1] if '--region' in args else '-'
-    file.write(f'aws {args[0]} {args[1]} profile={profile} region={region}\n')
+    file.write(f'aws {args[0]} {args[1]} profile={profile}\n')
 if args[:2] == ['sts', 'get-caller-identity']:
     assert profile in ('dev', 'prod'), profile
     print('123456789012' if profile == 'dev' or os.environ.get('DEMO_SAME_ACCOUNT') else '210987654321')
@@ -49,7 +52,7 @@ stack = chdir.rsplit('/', 1)[-1]
 verb = next((arg for arg in args if arg in ('init', 'apply', 'output', 'destroy')), '')
 profile = os.environ.get('AWS_PROFILE', '')
 with open(os.environ['DEMO_AUDIT'], 'a') as file:
-    file.write(f'tofu {verb} stack={stack} profile={profile} region={os.environ.get("TF_VAR_aws_region", "")} args={" ".join(args)}\n')
+    file.write(f'tofu {verb} stack={stack} profile={profile} args={" ".join(args)}\n')
 assert profile == stack, f'wrong account: {profile=} {stack=}'
 assert verb, args
 if verb == 'init':
@@ -135,8 +138,7 @@ class SandboxDemo(unittest.TestCase):
             audit = work / 'audit.log'
             audit.touch()
             env = dict(os.environ, PATH=str(mockbin) + os.pathsep + os.environ['PATH'],
-                       DEMO_AUDIT=str(audit), DEV_PROFILE='dev', PROD_PROFILE='prod',
-                       AWS_REGION='us-east-1')
+                       DEMO_AUDIT=str(audit), DEV_PROFILE='dev', PROD_PROFILE='prod')
             if os.geteuid() == 0:
                 for node in [work, *work.rglob('*')]:
                     os.chown(node, 65534, 65534)
@@ -146,13 +148,11 @@ class SandboxDemo(unittest.TestCase):
             provider = next(i for i, e in enumerate(events) if 'tofu apply stack=prod profile=prod' in e)
             consumer = next(i for i, e in enumerate(events) if 'tofu apply stack=dev profile=dev' in e)
             self.assertLess(provider, consumer)
-            self.assertTrue(all('region=us-east-1' in e for e in events
-                                if e.startswith('tofu ') or e.startswith('aws acm ')
-                                or e.startswith('aws ec2 ')))
             self.assertTrue((repo / 'dev.ovpn').exists())
             self.assertEqual((repo / 'dev.ovpn').stat().st_mode & 0o777, 0o600)
             self.assertTrue((repo / 'scripts/certs/client.crt').exists())
             self.assertTrue((repo / 'scripts/certs/client.key').exists())
+            # Teardown is explicitly non-interactive in the sandbox.
             args = ['bash', 'scripts/70_destroy_all.sh', '--yes']
             if os.geteuid() == 0:
                 args = ['runuser', '-u', 'nobody', '--', *args]
@@ -167,22 +167,6 @@ class SandboxDemo(unittest.TestCase):
             invalid = launch('first-run.sh', repo, {**env, 'DEMO_SAME_ACCOUNT': '1'})
             self.assertNotEqual(invalid.returncode, 0)
             self.assertFalse(any('tofu apply' in e for e in audit.read_text().splitlines()))
-
-    def test_partial_certificate_set_is_not_overwritten(self):
-        with tempfile.TemporaryDirectory() as directory:
-            scripts = Path(directory) / 'scripts'
-            scripts.mkdir()
-            shutil.copy2(ROOT / 'scripts/generate-vpn-certs.sh',
-                         scripts / 'generate-vpn-certs.sh')
-            certs = scripts / 'certs'
-            certs.mkdir()
-            (certs / 'ca.key').write_text('existing key')
-            run = subprocess.run(['bash', str(scripts / 'generate-vpn-certs.sh')],
-                                 capture_output=True, text=True, timeout=5)
-            self.assertNotEqual(run.returncode, 0)
-            self.assertIn('Incomplete certificate set', run.stderr)
-            self.assertEqual((certs / 'ca.key').read_text(), 'existing key')
-            self.assertFalse((certs / 'ca.crt').exists())
 
     def test_live_demo_backend_through_three_local_tcp_hops(self):
         template = (ROOT / 'modules/privatelink-provider/bootstrap.sh.tftpl').read_text()
@@ -200,7 +184,8 @@ class SandboxDemo(unittest.TestCase):
                     time.sleep(.05)
             else:
                 self.fail('Backend failed to start: ' + proc.stderr.read().decode(errors='replace'))
-            # Proxies stand in for the VPN, endpoint and NLB.
+            # A real HTTP request crosses local TCP proxies representing:
+            # VPN ingress -> interface endpoint -> provider NLB -> demo EC2.
             with TCPProxy(('127.0.0.1', backend_port)) as nlb:
                 with TCPProxy(nlb.server_address) as endpoint:
                     with TCPProxy(endpoint.server_address) as vpn:

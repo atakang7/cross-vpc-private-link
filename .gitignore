@@ -23,7 +23,6 @@ scripts/certs/
 **/credentials
 **/.env
 **/.env.*
-!.env.example
 
 # Local artifacts
 *.log
