@@ -1,26 +1,30 @@
+Part of [cross-vpc-private-link](../../README.md).
+
 # vpc-ssm-endpoints
 
-Adds SSM interface endpoints (ssm, ssmmessages, ec2messages) to a VPC.
-Creates its own security group to avoid module/VPC cycles.
+Creates private interface endpoints for SSM, SSM Messages, and EC2 Messages with a dedicated security group.
 
-Inputs
-- name (string)
-- vpc_id (string)
-- private_subnet_ids (list(string))
-- region (string)
-- allowed_cidrs (list(string)) optional
+## Run
 
-Outputs
-- security_group_id
+Used by the [dev](../../envs/dev/README.md) and [prod](../../envs/prod/README.md) stacks.
 
-Example
-```hcl
-module "ssm_endpoints" {
-  source             = "../../modules/vpc-ssm-endpoints"
-  name               = "dev"
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  region             = "eu-central-1"
-  allowed_cidrs      = ["10.10.0.0/16"]
-}
+## Test
+
+```bash
+tofu -chdir=modules/vpc-ssm-endpoints init -backend=false
+tofu -chdir=modules/vpc-ssm-endpoints validate
 ```
+
+## Config
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `name` | required | Resource prefix |
+| `vpc_id` | required | VPC that owns the endpoints |
+| `private_subnet_ids` | required | Endpoint ENI subnets |
+| `region` | required | AWS region for service names |
+| `allowed_cidrs` | `[]` | HTTPS ingress and VPC egress CIDRs |
+
+## Interfaces
+
+Output: `security_group_id`. Three endpoints use TCP/443 and AWS private DNS.
