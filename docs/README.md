@@ -1,25 +1,18 @@
-# Network paths
+# Network notes
 
-This lab connects a developer's VPN client to one private service in a separate AWS account. The consumer does not read the provider's OpenTofu state or route to its VPC.
+Private DNS resolves the consumer interface endpoint; PrivateLink carries TCP traffic to the provider's internal NLB.
 
-![Provider and consumer network](../img/architecture.svg)
+- `aws_route53_record.record` aliases `hello.internal.company` to the endpoint DNS name.
+- Consumer VPN clients must resolve `internal.company` through `10.10.0.2`.
+- `aws_vpc_endpoint_service_allowed_principal.allow` permits endpoint creation, not HTTP access.
+- The consumer receives `hello_world_service_name`; it never reads provider state.
 
-The provider publishes an internal NLB as a VPC endpoint service and allows the consumer account to create an endpoint. The consumer creates an interface endpoint and a private Route 53 alias for `hello.internal.company`.
+## Verify
 
-- **DNS:** the VPC resolver at `10.10.0.2` returns the endpoint's private addresses.
-- **TCP:** Client VPN -> interface endpoint -> PrivateLink -> internal NLB -> EC2 on port 8080.
-- **Access:** the allowed AWS principal permits endpoint creation; security groups and VPN authorization govern network traffic.
-
-The two accounts use separate VPC CIDRs. PrivateLink does not provide routed access to the provider's subnet.
-
-## Run it
-
-Follow the [quick start](../README.md#quick-start) to configure the two state backends and deploy the stacks. Then connect the VPN and run:
+With Client VPN connected, from the repository root:
 
 ```bash
 bash scripts/60_test_privateline.sh
 ```
 
-If DNS fails, check the VPN client's resolver selection before changing Route 53. If TCP times out, check endpoint state and security groups. If the target is unhealthy, check EC2 cloud-init logs and the `hello.service` unit.
-
-More detail is in the [operations guide](operations.md). The example uses one backend, HTTP without TLS, and demo certificates; it is not intended for a real application without further controls.
+Expect JSON containing `"message": "Hello from provider"`.
