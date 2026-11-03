@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Offline integration tests: mock AWS control plane and local TCP data plane.
-
-This deliberately does not claim to implement real AWS PrivateLink or Client VPN.
-No AWS credentials, Docker, cloud resources, or third-party libraries required.
-"""
+"""Offline checks for deployment order and local HTTP forwarding."""
 import json
 import os
 from pathlib import Path
@@ -157,7 +153,6 @@ class SandboxDemo(unittest.TestCase):
             self.assertEqual((repo / 'dev.ovpn').stat().st_mode & 0o777, 0o600)
             self.assertTrue((repo / 'scripts/certs/client.crt').exists())
             self.assertTrue((repo / 'scripts/certs/client.key').exists())
-            # Teardown is explicitly non-interactive in the sandbox.
             args = ['bash', 'scripts/70_destroy_all.sh', '--yes']
             if os.geteuid() == 0:
                 args = ['runuser', '-u', 'nobody', '--', *args]
@@ -205,8 +200,7 @@ class SandboxDemo(unittest.TestCase):
                     time.sleep(.05)
             else:
                 self.fail('Backend failed to start: ' + proc.stderr.read().decode(errors='replace'))
-            # A real HTTP request crosses local TCP proxies representing:
-            # VPN ingress -> interface endpoint -> provider NLB -> demo EC2.
+            # Proxies stand in for the VPN, endpoint and NLB.
             with TCPProxy(('127.0.0.1', backend_port)) as nlb:
                 with TCPProxy(nlb.server_address) as endpoint:
                     with TCPProxy(endpoint.server_address) as vpn:

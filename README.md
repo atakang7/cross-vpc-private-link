@@ -1,66 +1,82 @@
 # Cross-account AWS PrivateLink
 
-Private TCP service access across two AWS accounts, without VPC peering or public backend addresses. OpenTofu provisions the network and a small EC2 HTTP service for verification.
+This OpenTofu lab lets a VPN client reach an HTTP service in another AWS account without VPC peering. The consumer has an interface endpoint and private DNS; the provider serves traffic through an internal Network Load Balancer.
 
-![Cross-account PrivateLink network topology](img/architecture.svg)
+![Network topology](img/architecture.svg)
 
-## Topology
+## Quick start
 
-| Consumer (dev) | Provider (prod) |
-| --- | --- |
-| Client VPN · Route 53 private zone · interface endpoint | Endpoint service · internal NLB · EC2 target |
-| `10.10.0.0/16` | `10.20.0.0/16` |
+You need two AWS accounts with permissions to create VPC, EC2, NLB, Client VPN, ACM and Route 53 resources. On Linux, install AWS CLI, OpenTofu 1.10.0, OpenSSL and the tools checked by `scripts/00_check_prereqs.sh`. Install OpenVPN to connect after deployment.
 
-`hello.internal.company:8080` resolves to the consumer endpoint. TCP traffic then traverses PrivateLink to the provider NLB and demo EC2 instance. DNS is a separate lookup, not a network hop.
+Create a **private, versioned S3 state bucket** and a **DynamoDB lock table** (string partition key `LockID`) in each account first. The lab creates billable AWS resources.
 
-Source: [network diagram (SVG)](img/architecture.svg). Details and failure checks: [operations](docs/operations.md).
-
-## Deploy
-
-Requires two AWS accounts, AWS CLI profiles `dev` and `prod`, OpenTofu 1.10, OpenSSL and a Linux shell. **Resources incur AWS charges.**
-
-First, provision a private, versioned S3 state bucket and DynamoDB lock table (`LockID` string key) in **each** account. Configure the backend files:
+From the repository root:
 
 ```bash
+cp .env.example .env
 cp envs/dev/backend.hcl.example envs/dev/backend.hcl
 cp envs/prod/backend.hcl.example envs/prod/backend.hcl
-# Edit both backend.hcl files with actual bucket and lock table names.
-```
-
-Check the two identities, then run the guided deployment:
-
-```bash
-aws sts get-caller-identity --profile dev
-aws sts get-caller-identity --profile prod
+# Edit .env and both backend.hcl files for your accounts and state buckets.
+set -a
+. ./.env
+set +a
+aws sts get-caller-identity --profile "$DEV_PROFILE"
+aws sts get-caller-identity --profile "$PROD_PROFILE"
 bash first-run.sh
 ```
 
-The script generates demo VPN certificates, imports them to ACM, deploys **prod then dev**, and exports `dev.ovpn`. A dedicated Client VPN security group permits private DNS and TCP/8080 only to the interface endpoint. OpenTofu applies require confirmation. Set `DEV_PROFILE` and `PROD_PROFILE` to override profile names.
+The script creates demo VPN certificates, imports them to ACM in the consumer account, applies the provider stack before the consumer stack, and writes `dev.ovpn`. Both OpenTofu applies ask for approval.
 
-## Verify
+## Connect and verify
+
+Connect with the exported VPN profile:
 
 ```bash
 sudo openvpn --config dev.ovpn \
   --cert scripts/certs/client.crt \
   --key scripts/certs/client.key \
   --ca scripts/certs/ca.crt
+```
 
-# In a second terminal:
+In another terminal:
+
+```bash
 bash scripts/60_test_privateline.sh
 ```
 
-Expected: JSON containing `"message": "Hello from provider"`. If DNS fails, check that the VPN client resolves `internal.company` using the dev VPC resolver (`10.10.0.2`). Do not overwrite system-wide `/etc/resolv.conf` to work around this.
+The response contains `"message": "Hello from provider"`. If the name does not resolve, configure your VPN client's DNS for `internal.company` to use the consumer VPC resolver at `10.10.0.2`. Do not replace the system-wide resolver configuration.
 
-## Check locally
+## Configuration
+
+| Setting | Purpose |
+| --- | --- |
+| `DEV_PROFILE`, `PROD_PROFILE` in `.env` | AWS CLI profiles for the consumer and provider accounts |
+| `AWS_REGION` in `.env` | Region used by both OpenTofu stacks and VPN/ACM commands; defaults to `eu-central-1` |
+| `envs/*/backend.hcl` | S3 state bucket, key, bucket region and DynamoDB lock table for each account |
+| `envs/*/terraform.tfvars.example` | Example values for manual `tofu apply` commands |
+
+The deployment scripts pass `AWS_REGION` to OpenTofu as `TF_VAR_aws_region`. If you run OpenTofu directly in a different region, set that variable yourself. The two selected availability-zone names use the region's `a` and `b` suffixes.
+
+The example uses consumer `10.10.0.0/16`, provider `10.20.0.0/16`, and TCP port `8080`. These are lab topology values in the root modules.
+
+## Traffic path
+
+Client VPN connects to the consumer VPC. Route 53 resolves `hello.internal.company` to the consumer interface endpoint. PrivateLink carries TCP traffic to the provider's endpoint service, NLB and EC2 target. DNS resolution happens before the TCP connection; the provider VPC is not routed into the consumer VPC.
+
+See [operations](docs/operations.md) for fault checks.
+
+## Local checks
 
 ```bash
 tofu fmt -check -recursive
-tofu -chdir=envs/prod init -backend=false && tofu -chdir=envs/prod validate
-tofu -chdir=envs/dev init -backend=false && tofu -chdir=envs/dev validate
+tofu -chdir=envs/prod init -backend=false -input=false -lockfile=readonly
+tofu -chdir=envs/prod validate
+tofu -chdir=envs/dev init -backend=false -input=false -lockfile=readonly
+tofu -chdir=envs/dev validate
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-CI also runs a mocked OpenTofu VPN plan, Trivy IaC checks, and browser-renders the architecture SVG. Committed provider lockfiles pin dependency checksums; update them deliberately with `tofu init -upgrade`. The offline tests mock two AWS accounts and exercise a local HTTP proxy chain; **they do not validate deployed AWS networking or VPN negotiation**.
+CI uses OpenTofu 1.10.0 and Python 3.12.7. It also runs an offline Client VPN plan test and an IaC scan. The Python tests use AWS CLI mocks and local TCP forwarding; they do not confirm live PrivateLink connectivity or VPN negotiation.
 
 ## Teardown
 
@@ -68,10 +84,10 @@ CI also runs a mocked OpenTofu VPN plan, Trivy IaC checks, and browser-renders t
 bash scripts/70_destroy_all.sh
 ```
 
-Destroys dev before prod. Imported ACM certificates and state backends remain for manual cleanup.
+The script asks for confirmation and removes consumer resources before provider resources. ACM certificate imports and state backends need separate cleanup.
 
 ## Limits
 
-This is a **reference lab**, not production infrastructure: one EC2 target, plaintext HTTP, automatically accepted allowlisted endpoints, broad VPC-level VPN authorization, and self-signed demo certificates. Use TLS, application auth, narrower access controls, redundant targets, and managed certificate lifecycle before using the pattern for a real workload.
+This is a lab, not a deployment template for a live service. It has one EC2 target, plaintext HTTP, no application authentication, automatic acceptance for allowlisted endpoint principals, broad VPC-level VPN authorization, and self-signed demo certificates. It does not provide backend failover.
 
-For stack-specific inputs, see [dev](envs/dev/README.md) and [prod](envs/prod/README.md).
+The code is under the [MIT license](LICENSE).

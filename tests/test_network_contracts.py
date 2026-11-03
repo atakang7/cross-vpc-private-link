@@ -1,8 +1,4 @@
-"""Guardrails for the AWS networking contract.
-
-These assertions catch accidental security regressions before AWS deployment.
-They are static checks, not a substitute for a live two-account acceptance test.
-"""
+"""Static checks for the VPC and Client VPN access rules."""
 from pathlib import Path
 import re
 import unittest

@@ -1,43 +1,25 @@
-# Cross-account service access with AWS PrivateLink
+# Network paths
 
-The goal is simple: reach **one internal service** in a different AWS account without routing between the two VPCs.
+This lab connects a developer's VPN client to one private service in a separate AWS account. The consumer does not read the provider's OpenTofu state or route to its VPC.
 
-![Provider/consumer network topology](../img/architecture.svg)
+![Provider and consumer network](../img/architecture.svg)
 
-## Design
+The provider publishes an internal NLB as a VPC endpoint service and allows the consumer account to create an endpoint. The consumer creates an interface endpoint and a private Route 53 alias for `hello.internal.company`.
 
-The provider publishes an internal NLB through a VPC endpoint service and allows the consumer account principal. The consumer creates an interface endpoint and a private Route 53 alias (`hello.internal.company`). The developer reaches the consumer network via certificate-authenticated AWS Client VPN.
+- **DNS:** the VPC resolver at `10.10.0.2` returns the endpoint's private addresses.
+- **TCP:** Client VPN -> interface endpoint -> PrivateLink -> internal NLB -> EC2 on port 8080.
+- **Access:** the allowed AWS principal permits endpoint creation; security groups and VPN authorization govern network traffic.
 
-The roles are distinct:
+The two accounts use separate VPC CIDRs. PrivateLink does not provide routed access to the provider's subnet.
 
-- **DNS:** VPC resolver `10.10.0.2` resolves the private name to endpoint ENI addresses.
-- **Data:** Client VPN → endpoint ENI → PrivateLink → endpoint service → internal NLB → EC2 TCP/8080.
-- **Permission:** An allowed principal permits endpoint creation. Endpoint security groups, VPN authorization, and application authentication govern access separately.
+## Run it
 
-There is no VPC peering or routed connectivity to the provider VPC.
-
-## Reproduce
-
-See the [repository README](../README.md#deploy) for the two-account setup, state backends and cost warning.
-
-```bash
-bash first-run.sh
-```
-
-After connecting with the exported `dev.ovpn`, verify:
+Follow the [quick start](../README.md#quick-start) to configure the two state backends and deploy the stacks. Then connect the VPN and run:
 
 ```bash
 bash scripts/60_test_privateline.sh
 ```
 
-The demo returns a short JSON response from the backend EC2 instance.
+If DNS fails, check the VPN client's resolver selection before changing Route 53. If TCP times out, check endpoint state and security groups. If the target is unhealthy, check EC2 cloud-init logs and the `hello.service` unit.
 
-## Things that break
-
-- **VPN connected, hostname unresolved:** check the client's DNS resolver selection. Split tunnel does not configure conditional DNS on every OS.
-- **Endpoint exists, no response:** check provider allowed principals / endpoint acceptance, NLB target health and endpoint/target SG rules.
-- **EC2 backend unhealthy:** inspect cloud-init and `hello.service`. The instance has no NAT or internet access; boot must not download packages.
-
-The deployed example has **one backend** and **plaintext HTTP**. It demonstrates network isolation, not production availability or zero-trust application identity.
-
-See [operational checks](operations.md) and [teardown](../README.md#teardown).
+More detail is in the [operations guide](operations.md). The example uses one backend, HTTP without TLS, and demo certificates; it is not intended for a real application without further controls.
