@@ -20,3 +20,5 @@ AWS_PROFILE=dev tofu -chdir=envs/dev apply \
 Private DNS resolves `hello.internal.company` inside the VPC. For a remote VPN client, OS DNS configuration must direct that private suffix to `10.10.0.2`. VPN authorization covers the dev VPC; it is intentionally broader than production access should be.
 
 Outputs: `private_dns_hello`, `vpce_dns`, `vpn_endpoint`, `vpn_dns`.
+
+For manual deployment outside `eu-central-1`, export `TF_VAR_aws_region` before running OpenTofu. The deployment script reads `AWS_REGION` instead.
