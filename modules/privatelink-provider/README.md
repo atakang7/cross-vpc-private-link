@@ -1,9 +1,40 @@
+Part of [cross-vpc-private-link](../../README.md).
+
 # privatelink-provider
 
-Provisions an **internal** NLB, TCP listener/target group, an endpoint service restricted to `allowed_principals`, and optionally a **single demo** Amazon Linux 2023 EC2 target. The backend is bootstrapped with preinstalled Python 3 and systemd, with no package downloads or public address.
+Creates an internal TCP NLB, a VPC endpoint service, and an optional Amazon Linux 2023 EC2 demo target.
 
-Inputs: `name`, `vpc_id`, `vpc_cidr`, `private_subnet_ids`, `port` (default 8080), `allowed_principals`, `create_demo_instance` (default true).
+```text
++--------------+  TCP  +--------------+
+| internal NLB | ----> | demo EC2     |
++--------------+       +--------------+
+```
 
-Outputs: `service_name` and `demo_private_ip` (null if disabled).
+## Run
 
-Cross-zone load balancing is enabled because this lab has only one demo target across an NLB spanning two AZs. This does not make the backend highly available. The backend SG only admits traffic from the provider VPC CIDR; it is **not** open to the internet. Endpoint acceptance is automatic for allowed principals **only in this lab**. Production requires explicit approval, app-layer TLS/authentication, and redundant targets.
+The [prod stack](../../envs/prod/README.md) applies this module.
+
+## Test
+
+```bash
+tofu -chdir=modules/privatelink-provider init -backend=false
+tofu -chdir=modules/privatelink-provider validate
+```
+
+## Config
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `name` | required | Resource prefix |
+| `vpc_id` | required | Provider VPC |
+| `vpc_cidr` | required | Demo backend ingress source |
+| `private_subnet_ids` | required | NLB subnets |
+| `port` | `8080` | Listener, target, and demo HTTP port |
+| `allowed_principals` | `[]` | AWS principals allowed to connect |
+| `create_demo_instance` | `true` | Create one backend instance |
+
+## Interfaces
+
+Outputs: `service_name`, `demo_private_ip` (null without a demo instance).
+
+`bootstrap.sh.tftpl` writes `/opt/hello_world.py` and `hello.service`. GET requests return JSON with `message` and `ts`.
