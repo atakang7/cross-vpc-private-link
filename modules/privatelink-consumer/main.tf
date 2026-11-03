@@ -31,7 +31,7 @@ resource "aws_vpc_endpoint" "this" {
   vpc_endpoint_type   = "Interface"
   subnet_ids          = var.subnet_ids
   security_group_ids  = [aws_security_group.endpoint.id]
-  private_dns_enabled = false # disable AWS managed dns
+  private_dns_enabled = false
   tags                = { Name = "${var.name}-vpce" }
 }
 
