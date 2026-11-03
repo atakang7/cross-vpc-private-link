@@ -1,38 +1,11 @@
-Part of [cross-vpc-private-link](../../README.md).
-
 # client-vpn
 
-Creates a certificate-authenticated AWS Client VPN endpoint, subnet associations, private DNS egress rules, and 30-day CloudWatch connection logs.
+Creates an AWS Client VPN endpoint with mutual certificate authentication, CloudWatch connection logging (30-day retention), authorization for `vpc_cidr`, and subnet associations. Split tunneling is enabled.
 
-## Run
+Inputs: `name`, `vpc_id`, `subnet_ids`, `client_cidr_block`, `dns_servers`, `vpc_cidr`, `server_certificate_arn`, `root_ca_arn`, `target_vpc_subnet_id`, `manage_vpc_route`, `app_port`, `allowed_app_sg_ids`.
 
-The [dev stack](../../envs/dev/README.md) applies this module.
+Outputs: `endpoint_id`, `dns_name`.
 
-## Test
+The module attaches a dedicated target-network security group. Only DNS to the consumer VPC resolver and TCP to explicitly allowlisted application security groups are permitted.
 
-```bash
-cp envs/dev/.terraform.lock.hcl modules/client-vpn/.terraform.lock.hcl
-tofu -chdir=modules/client-vpn init -backend=false -lockfile=readonly
-tofu -chdir=modules/client-vpn test -no-color
-```
-
-## Config
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `name` | required | Resource prefix |
-| `vpc_id` | required | Consumer VPC |
-| `subnet_ids` | required | VPN network associations |
-| `target_vpc_subnet_id` | required | Optional managed route target |
-| `client_cidr_block` | required | VPN client CIDR |
-| `dns_servers` | `[]` | DNS servers advertised to clients |
-| `vpc_cidr` | required | VPN authorization and DNS egress CIDR |
-| `server_certificate_arn` | required | ACM server certificate |
-| `root_ca_arn` | required | ACM client CA |
-| `manage_vpc_route` | `true` | Manage route when associations do not provide it |
-| `app_port` | `8080` | Allowed application TCP port |
-| `allowed_app_sg_ids` | `[]` | Application security groups permitted as egress targets |
-
-## Interfaces
-
-Outputs: `endpoint_id`, `dns_name`. VPN authorization covers `vpc_cidr`; the security group limits DNS and application traffic.
+The root module sets `manage_vpc_route=false` because associations produce the local VPC route. A connected VPN client still needs correct OS DNS resolver configuration. The all-groups VPC authorization is suitable for a lab, **not** least-privilege production access.

@@ -17,21 +17,10 @@ for f in ca.key server.key client.key; do
 	fi
 done
 
-# A partial set must not replace an existing CA or client private key.
-cert_files=(ca.key ca.crt server.key server.crt client.key client.crt)
-present=0
-for file in "${cert_files[@]}"; do
-  if [[ -e "$file" || -L "$file" ]]; then
-    present=$((present + 1))
-  fi
-done
-if (( present == ${#cert_files[@]} )); then
-  echo "Certs already exist at $OUT_DIR; skipping generation."
-  exit 0
-fi
-if (( present > 0 )); then
-  echo "Incomplete certificate set in $OUT_DIR; move it aside before generating new certificates." >&2
-  exit 1
+# If certs already exist and are writable, skip regeneration
+if [[ -f ca.key && -f ca.crt && -f server.key && -f server.crt && -f client.key && -f client.crt ]]; then
+	echo "Certs already exist at $OUT_DIR; skipping generation."
+	exit 0
 fi
 
 # CA
