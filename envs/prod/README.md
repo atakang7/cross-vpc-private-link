@@ -1,22 +1,35 @@
-# Provider stack — prod account
+Part of [cross-vpc-private-link](../../README.md).
 
-Creates private VPC subnets, SSM endpoints, internal NLB, one demo EC2 target, and a VPC endpoint service. No public subnet, internet gateway, or NAT is provisioned.
+# prod
+
+Applies the provider VPC, private SSM endpoints, internal NLB, demo EC2 instance, and PrivateLink endpoint service.
+
+## Run
+
+Create the remote state bucket and lock table, then edit `backend.hcl` after copying the example.
 
 ```bash
 cp envs/prod/backend.hcl.example envs/prod/backend.hcl
-# Edit bucket, key, region and DynamoDB lock table for the prod account.
-AWS_PROFILE=prod tofu -chdir=envs/prod init -backend-config=backend.hcl
-
-AWS_PROFILE=prod tofu -chdir=envs/prod apply \
-  -var "dev_account_root_arn=arn:aws:iam::123456789012:root"
-
-AWS_PROFILE=prod tofu -chdir=envs/prod output -raw hello_world_service_name
+DEV_PROFILE=dev PROD_PROFILE=prod bash scripts/30_deploy_prod.sh
 ```
 
-Replace the example account ID with the **actual consumer AWS account ID**. The allowlist grants that account permission to create service endpoints. Automatic acceptance is enabled **only for this lab**.
+## Test
 
-You can run `DEV_PROFILE=dev PROD_PROFILE=prod bash scripts/30_deploy_prod.sh` after backend setup; it obtains the consumer account ID from AWS STS rather than guessing it.
+```bash
+tofu -chdir=envs/prod init -backend=false -lockfile=readonly
+tofu -chdir=envs/prod validate
+```
 
-The provider output `hello_world_service_name` is passed explicitly to the consumer stack. Do not give the consumer account read access to the production state just to obtain it.
+## Config
 
-The demo uses one EC2 target and plaintext HTTP; see [production limitations](../../README.md#limits).
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `dev_account_root_arn` | required | Consumer account allowed to create endpoints |
+
+The AWS provider uses `eu-central-1`. `backend.hcl` supplies the S3 bucket, state path, region and DynamoDB lock table.
+
+## Interfaces
+
+Outputs: `hello_world_service_name` for the dev stack; `hello_world_demo_ip` for the single demo target.
+
+The provider uses TCP/8080 and automatically accepts endpoint requests from allowed principals.
